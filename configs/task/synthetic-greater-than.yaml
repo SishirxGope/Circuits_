@@ -1,0 +1,17 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Synthetic task configs (Q6 provisional: seeded synthetic prompts)
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING DEFAULT (HUMAN_DECISIONS.md Q6): synthetic seeded prompts
+# only; no external dataset download; do NOT claim they reproduce published
+# IOI/greater-than/docstring behavior. Real task datasets remain OPEN.
+
+name: synthetic-greater-than
+family: greater-than-synthetic
+dataset: synthetic-seeded-greater-than
+synthetic: true
+n_prompts: 24                     # tiny dry-run count; real counts PI-owned (Q6)
+max_seq_len: 16
+attribution_target: synthetic_logits
+answer_type: token
+seed: 0
+pi_confirmed: false               # real dataset source/count still OPEN (Q6)

@@ -1,0 +1,683 @@
+{
+  "criterion_commit": "d7c2e58",
+  "criterion_file": "docs/preregistration/2026-09-14_dense_node_grid_criterion.md",
+  "input_sha256": {
+    "greater_than_seed0.json": "50f8c43ce61e07dbbc0ef8f99a20b599afb92cb09b45319e6b69582a8563ee0d",
+    "greater_than_seed1.json": "c758044e1310a21d441248302120c551bd7f2e6bd40e8b04b27f6116a4a7fd3f",
+    "ioi_seed0.json": "7506684228259d0f92234d29c9d3f8c809d353e39a968e07cd0029a561d552c1",
+    "ioi_seed1.json": "ac8d11d9601c9a92ddb6fc2d4f4efb91db3ef442077c5eb78f309f363d43a25c"
+  },
+  "candidates_in_order": [
+    0.95,
+    0.9,
+    0.85,
+    0.8,
+    0.7,
+    0.6,
+    0.5,
+    0.4,
+    0.3
+  ],
+  "pass_rule": "on all four runs: match is False AND nested_pairs <= 60/120",
+  "selection_rule": "first passing candidate in list order; none -> return to PI",
+  "selected_edge_low": null,
+  "results": [
+    {
+      "edge_range": [
+        0.99,
+        0.95
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 89,
+          "mean_pairwise_jaccard": 0.4771,
+          "consensus": 73,
+          "smallest_view": 81,
+          "edges_per_view": [
+            81,
+            827
+          ],
+          "nodes_per_view": [
+            14,
+            51
+          ],
+          "passes": false
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 82,
+          "mean_pairwise_jaccard": 0.4906,
+          "consensus": 81,
+          "smallest_view": 93,
+          "edges_per_view": [
+            93,
+            844
+          ],
+          "nodes_per_view": [
+            15,
+            49
+          ],
+          "passes": false
+        },
+        "greater_than_seed0": {
+          "match": true,
+          "nested_pairs": 116,
+          "mean_pairwise_jaccard": 0.4934,
+          "consensus": 16,
+          "smallest_view": 16,
+          "edges_per_view": [
+            16,
+            200
+          ],
+          "nodes_per_view": [
+            8,
+            26
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": false,
+          "nested_pairs": 97,
+          "mean_pairwise_jaccard": 0.4746,
+          "consensus": 15,
+          "smallest_view": 16,
+          "edges_per_view": [
+            16,
+            197
+          ],
+          "nodes_per_view": [
+            8,
+            26
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.9
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 65,
+          "mean_pairwise_jaccard": 0.5149,
+          "consensus": 63,
+          "smallest_view": 81,
+          "edges_per_view": [
+            81,
+            525
+          ],
+          "nodes_per_view": [
+            14,
+            50
+          ],
+          "passes": false
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 67,
+          "mean_pairwise_jaccard": 0.5262,
+          "consensus": 73,
+          "smallest_view": 93,
+          "edges_per_view": [
+            93,
+            545
+          ],
+          "nodes_per_view": [
+            15,
+            49
+          ],
+          "passes": false
+        },
+        "greater_than_seed0": {
+          "match": false,
+          "nested_pairs": 86,
+          "mean_pairwise_jaccard": 0.5197,
+          "consensus": 14,
+          "smallest_view": 16,
+          "edges_per_view": [
+            16,
+            117
+          ],
+          "nodes_per_view": [
+            8,
+            24
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": false,
+          "nested_pairs": 90,
+          "mean_pairwise_jaccard": 0.5153,
+          "consensus": 14,
+          "smallest_view": 15,
+          "edges_per_view": [
+            15,
+            119
+          ],
+          "nodes_per_view": [
+            8,
+            24
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.85
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 66,
+          "mean_pairwise_jaccard": 0.5511,
+          "consensus": 53,
+          "smallest_view": 79,
+          "edges_per_view": [
+            79,
+            371
+          ],
+          "nodes_per_view": [
+            14,
+            47
+          ],
+          "passes": false
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 63,
+          "mean_pairwise_jaccard": 0.5686,
+          "consensus": 67,
+          "smallest_view": 93,
+          "edges_per_view": [
+            93,
+            387
+          ],
+          "nodes_per_view": [
+            15,
+            47
+          ],
+          "passes": false
+        },
+        "greater_than_seed0": {
+          "match": false,
+          "nested_pairs": 91,
+          "mean_pairwise_jaccard": 0.5648,
+          "consensus": 13,
+          "smallest_view": 15,
+          "edges_per_view": [
+            15,
+            87
+          ],
+          "nodes_per_view": [
+            8,
+            23
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": false,
+          "nested_pairs": 87,
+          "mean_pairwise_jaccard": 0.5555,
+          "consensus": 14,
+          "smallest_view": 15,
+          "edges_per_view": [
+            15,
+            88
+          ],
+          "nodes_per_view": [
+            8,
+            23
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.8
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 48,
+          "mean_pairwise_jaccard": 0.5727,
+          "consensus": 49,
+          "smallest_view": 76,
+          "edges_per_view": [
+            76,
+            273
+          ],
+          "nodes_per_view": [
+            14,
+            43
+          ],
+          "passes": true
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 57,
+          "mean_pairwise_jaccard": 0.6103,
+          "consensus": 61,
+          "smallest_view": 87,
+          "edges_per_view": [
+            87,
+            268
+          ],
+          "nodes_per_view": [
+            15,
+            38
+          ],
+          "passes": true
+        },
+        "greater_than_seed0": {
+          "match": false,
+          "nested_pairs": 96,
+          "mean_pairwise_jaccard": 0.61,
+          "consensus": 13,
+          "smallest_view": 14,
+          "edges_per_view": [
+            14,
+            66
+          ],
+          "nodes_per_view": [
+            8,
+            21
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": false,
+          "nested_pairs": 79,
+          "mean_pairwise_jaccard": 0.5804,
+          "consensus": 13,
+          "smallest_view": 14,
+          "edges_per_view": [
+            14,
+            66
+          ],
+          "nodes_per_view": [
+            8,
+            21
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.7
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 43,
+          "mean_pairwise_jaccard": 0.6471,
+          "consensus": 45,
+          "smallest_view": 69,
+          "edges_per_view": [
+            69,
+            150
+          ],
+          "nodes_per_view": [
+            14,
+            33
+          ],
+          "passes": true
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 35,
+          "mean_pairwise_jaccard": 0.6422,
+          "consensus": 52,
+          "smallest_view": 79,
+          "edges_per_view": [
+            79,
+            167
+          ],
+          "nodes_per_view": [
+            15,
+            35
+          ],
+          "passes": true
+        },
+        "greater_than_seed0": {
+          "match": false,
+          "nested_pairs": 69,
+          "mean_pairwise_jaccard": 0.6631,
+          "consensus": 12,
+          "smallest_view": 14,
+          "edges_per_view": [
+            14,
+            39
+          ],
+          "nodes_per_view": [
+            8,
+            16
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": false,
+          "nested_pairs": 80,
+          "mean_pairwise_jaccard": 0.6692,
+          "consensus": 12,
+          "smallest_view": 14,
+          "edges_per_view": [
+            14,
+            41
+          ],
+          "nodes_per_view": [
+            8,
+            17
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.6
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 35,
+          "mean_pairwise_jaccard": 0.6997,
+          "consensus": 39,
+          "smallest_view": 60,
+          "edges_per_view": [
+            60,
+            85
+          ],
+          "nodes_per_view": [
+            14,
+            24
+          ],
+          "passes": true
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 9,
+          "mean_pairwise_jaccard": 0.6594,
+          "consensus": 43,
+          "smallest_view": 73,
+          "edges_per_view": [
+            73,
+            106
+          ],
+          "nodes_per_view": [
+            15,
+            27
+          ],
+          "passes": true
+        },
+        "greater_than_seed0": {
+          "match": true,
+          "nested_pairs": 80,
+          "mean_pairwise_jaccard": 0.7655,
+          "consensus": 12,
+          "smallest_view": 12,
+          "edges_per_view": [
+            12,
+            19
+          ],
+          "nodes_per_view": [
+            8,
+            11
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": true,
+          "nested_pairs": 86,
+          "mean_pairwise_jaccard": 0.7441,
+          "consensus": 12,
+          "smallest_view": 12,
+          "edges_per_view": [
+            12,
+            22
+          ],
+          "nodes_per_view": [
+            8,
+            12
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.5
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 37,
+          "mean_pairwise_jaccard": 0.648,
+          "consensus": 29,
+          "smallest_view": 49,
+          "edges_per_view": [
+            49,
+            81
+          ],
+          "nodes_per_view": [
+            14,
+            22
+          ],
+          "passes": true
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 18,
+          "mean_pairwise_jaccard": 0.6507,
+          "consensus": 34,
+          "smallest_view": 55,
+          "edges_per_view": [
+            55,
+            93
+          ],
+          "nodes_per_view": [
+            15,
+            21
+          ],
+          "passes": true
+        },
+        "greater_than_seed0": {
+          "match": true,
+          "nested_pairs": 83,
+          "mean_pairwise_jaccard": 0.7773,
+          "consensus": 10,
+          "smallest_view": 10,
+          "edges_per_view": [
+            10,
+            17
+          ],
+          "nodes_per_view": [
+            8,
+            11
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": true,
+          "nested_pairs": 88,
+          "mean_pairwise_jaccard": 0.7934,
+          "consensus": 11,
+          "smallest_view": 11,
+          "edges_per_view": [
+            11,
+            17
+          ],
+          "nodes_per_view": [
+            8,
+            10
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.4
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": false,
+          "nested_pairs": 37,
+          "mean_pairwise_jaccard": 0.5415,
+          "consensus": 17,
+          "smallest_view": 22,
+          "edges_per_view": [
+            22,
+            81
+          ],
+          "nodes_per_view": [
+            13,
+            20
+          ],
+          "passes": true
+        },
+        "ioi_seed1": {
+          "match": false,
+          "nested_pairs": 18,
+          "mean_pairwise_jaccard": 0.5374,
+          "consensus": 18,
+          "smallest_view": 27,
+          "edges_per_view": [
+            27,
+            93
+          ],
+          "nodes_per_view": [
+            14,
+            20
+          ],
+          "passes": true
+        },
+        "greater_than_seed0": {
+          "match": true,
+          "nested_pairs": 119,
+          "mean_pairwise_jaccard": 0.7885,
+          "consensus": 8,
+          "smallest_view": 8,
+          "edges_per_view": [
+            8,
+            17
+          ],
+          "nodes_per_view": [
+            7,
+            9
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": true,
+          "nested_pairs": 119,
+          "mean_pairwise_jaccard": 0.8764,
+          "consensus": 10,
+          "smallest_view": 10,
+          "edges_per_view": [
+            10,
+            17
+          ],
+          "nodes_per_view": [
+            8,
+            9
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    },
+    {
+      "edge_range": [
+        0.99,
+        0.3
+      ],
+      "runs": {
+        "ioi_seed0": {
+          "match": true,
+          "nested_pairs": 51,
+          "mean_pairwise_jaccard": 0.3938,
+          "consensus": 5,
+          "smallest_view": 5,
+          "edges_per_view": [
+            5,
+            81
+          ],
+          "nodes_per_view": [
+            5,
+            20
+          ],
+          "passes": false
+        },
+        "ioi_seed1": {
+          "match": true,
+          "nested_pairs": 51,
+          "mean_pairwise_jaccard": 0.4068,
+          "consensus": 7,
+          "smallest_view": 7,
+          "edges_per_view": [
+            7,
+            93
+          ],
+          "nodes_per_view": [
+            6,
+            19
+          ],
+          "passes": false
+        },
+        "greater_than_seed0": {
+          "match": true,
+          "nested_pairs": 120,
+          "mean_pairwise_jaccard": 0.3557,
+          "consensus": 0,
+          "smallest_view": 0,
+          "edges_per_view": [
+            0,
+            17
+          ],
+          "nodes_per_view": [
+            2,
+            8
+          ],
+          "passes": false
+        },
+        "greater_than_seed1": {
+          "match": true,
+          "nested_pairs": 120,
+          "mean_pairwise_jaccard": 0.397,
+          "consensus": 0,
+          "smallest_view": 0,
+          "edges_per_view": [
+            0,
+            17
+          ],
+          "nodes_per_view": [
+            2,
+            8
+          ],
+          "passes": false
+        }
+      },
+      "passes": false
+    }
+  ]
+}

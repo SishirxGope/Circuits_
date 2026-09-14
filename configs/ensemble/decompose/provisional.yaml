@@ -1,0 +1,15 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Provisional decompose (band cutoff) config group
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING DEFAULT (docs/HUMAN_DECISIONS.md Q1 + §3.2):
+#   core: s(e) >= 0.90; contingent: 0.10 < s(e) < 0.90; noise: s(e) <= 0.10.
+# Synthetic tests + dry-run decomposition only. Final cutoffs remain PI-dependent
+# before real Stage A reporting (configs/ensemble/decompose/final.yaml stays null).
+
+name: provisional
+core_threshold: 0.90
+noise_threshold: 0.10
+status: PROVISIONAL_ENGINEERING_DEFAULT
+final_confirmed: false
+# Convention (src/science/decompose.py): s(e) >= core_threshold => core;
+# s(e) <= noise_threshold => noise; otherwise contingent. Boundaries inclusive.

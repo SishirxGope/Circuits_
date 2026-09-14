@@ -1,0 +1,23 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Initialize model configs
+# reviewed-by: PENDING
+#
+# IMMUTABILITY: files under configs/ may not be edited once any experiment references
+# them (AI_RULES.md 1.2). Resolve all TODO [QUESTION FOR PI] / PLACEHOLDER items
+# before Stage A. Architecture numbers below are to be verified against the pinned
+# HF config at Stage A setup (AI_RULES.md 2.2 - no unverified numbers in the paper).
+
+name: gemma-2-2b
+hf_id: google/gemma-2-2b
+hf_revision: c5ebcd40d208330abc697524c919956e692655cf   # Q5 PINNED 2026-09-12 from the HF API (main HEAD)
+n_params: 2.6B
+d_model: 2304                      # PLACEHOLDER - verify against pinned HF config
+n_layers: 26                       # PLACEHOLDER - verify against pinned HF config
+n_heads: 8                         # PLACEHOLDER - verify against pinned HF config
+head_dim: 256                      # PLACEHOLDER - verify against pinned HF config
+context_length: 8192               # PLACEHOLDER - verify against pinned HF config
+dtype: bfloat16                    # Gemma-2 is bf16-trained (sae-pruning-paper fork README, revision notes)
+backend: transformerlens           # circuit-tracer backend; nnsight is the experimental fallback
+transcoder_set: mntss/gemma-scope-transcoders   # circuit-tracer PLTs for Gemma-2-2B (fork README)
+transcoder_revision: 9250a2d4860ce5ed5c96c14d5882b7d8162809a3   # Q5 PINNED 2026-09-12
+sae_layer: 12                      # layer audited by ref [1] feature audit (Gemma-2-2B L12); cross-audit anchor for C5
+roles: [primary]

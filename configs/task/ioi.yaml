@@ -1,0 +1,48 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Initialize task configs
+# reviewed-by: PENDING
+#
+# IMMUTABILITY: files under configs/ may not be edited once any experiment references
+# them (AI_RULES.md 1.2). All PLACEHOLDER values must be fixed and justified before
+# Stage A (AI_RULES.md 2.3). Published-circuit caveat (CLAUDE.md §6): reference
+# circuits were built on GPT-2 small / small attention-only models; on our primary
+# models they serve as sanity anchors for the extraction stack, and compression
+# deltas are measured against our own Stage-A dense ensemble on the same model.
+
+name: ioi
+family: indirect-object-identification
+# Reference circuit: Wang et al., ICLR 2023 (PRD.md §2). Used as a sanity anchor for
+# the extraction stack and as the Phase-1 exit-gate regression test
+# (ARCHITECTURE.md §6).
+dataset: ioi-templates-wang2211.00593
+dataset_source: ACDC acdc/ioi/ioi_dataset.py @ bc99ace8 (seeded edit of Easy-Transformer @ ea15315d; Wang et al., ICLR 2023, arXiv:2211.00593)
+# CORRECTED 2026-09-14: this previously said "transformer_lens IOI generator". TransformerLens's
+# evals.IOIDataset has only 2 templates; the 30 Wang et al. templates are in the ACDC/Easy-Transformer
+# file. Implemented in src/tasks/ioi.py. Names are filtered to single tokens per model (88/99 under Pythia).
+dataset_license: MIT (generator); prompts are synthetic template text -- no PII, no corpus licence
+n_prompts: 300
+n_templates: 30                     # 15 BABA + 15 ABBA; ABBA is BABA with the first
+                                    # clause order swapped (verified 2026-09-12 against
+                                    # the reference ioi_dataset.py: BABA_TEMPLATES has
+                                    # exactly 15 entries, ABBA_TEMPLATES = BABA[:]).
+                                    # The previous value 400 was a placeholder and is
+                                    # not a template count in any IOI release.
+max_seq_len: 64                     # IOI prompts are short; upper-bound per template
+attribution_target: indirect_object_logits    # PLACEHOLDER - confirm TargetSpec against circuit-tracer targets API
+answer_type: token
+seed: 0
+prepend_bos: false                  # PRE-REGISTERED 2026-09-14 (PI): no BOS, matching the ACDC/EAP
+                                    # task setups. Decided on principle: a dense-model check showed
+                                    # the tasks move in OPPOSITE directions with BOS, so the data
+                                    # favoured neither. The Q7 BOS-per-window rule is for perplexity.
+bootstrap_resampling_unit: template
+pi_confirmed: true                  # Q6 pre-registered 2026-09-12
+pre_registered_on: 2026-09-12
+# Q6 PRE-REGISTERED 2026-09-12 (PI-approved).
+#   n_prompts = 300 (Run_Plan recommends 200-500; attribution cost is linear in
+#     prompts and is then multiplied by S and by (1 + R) in Stage B).
+#   bootstrap_resampling_unit = template. Prompts generated from one template are
+#     CORRELATED, so resampling prompts would treat correlated draws as independent
+#     and return CIs that are too narrow. AI_RULES 4.2 requires the scheme in advance.
+#     NOTE: this is the PROMPT bootstrap. The CSI bootstrap axes (over B, S, r) are a
+#     separate open item -- see HUMAN_DECISIONS.md "Also open, not numbered".
+

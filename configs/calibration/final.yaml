@@ -1,0 +1,58 @@
+# [AI-GEN] agent=Claude date=2026-09-12 task=Q7 pre-registration: calibration + perplexity protocol
+# reviewed-by: PENDING
+#
+# Q7 PRE-REGISTERED 2026-09-12 (PI-approved). Two DIFFERENT corpora, which is the
+# correction: HUMAN_DECISIONS.md recommended WikiText-2 "for both calibration and the
+# perplexity evaluation", but the reference work uses one for each. Calibrating Wanda
+# on WikiText-2 while ref [1] calibrated on FineWeb-Edu would mean our Wanda-pruned
+# model is not their Wanda-pruned model, and C5 would correlate circuit damage from one
+# intervention against feature damage from another.
+#
+# Every value below was read from the pinned fork
+# (hecboar/sae-pruning-paper @ 261191804675e2d39d0a265320dbc0bc85afd30a) on 2026-09-12,
+# not quoted from prose.
+
+name: final
+
+# ---- calibration: what GPTQ / AWQ / Wanda see, and NOTHING else ------------------
+calibration:
+  corpus: fineweb-edu
+  hf_id: HuggingFaceFW/fineweb-edu
+  license: ODC-BY
+  n_tokens: 300000        # revision/src/saediag/reprune.py::calib_cache_path default
+  seed: 7                 # SAME source: "methods are deterministic given the same
+                          # calibration token cache (seed 7)". Reproducing their masks
+                          # needs the seed, not merely the corpus -- this is not in
+                          # Run_Plan and is easy to miss.
+  dtype: bfloat16         # reprune.py: wanda uses bf16 for the calibration forward
+                          # because Gemma activations overflow in fp16
+  context_length: null    # ⚠️ NOT INVENTED. The fork reads ctx from the cached array's
+                          # shape rather than declaring it; its SAE activations use
+                          # context 256, but that is the SAE cache, not necessarily the
+                          # pruning calibration cache. Confirm when the cache is built.
+
+# ---- perplexity evaluation: a different corpus and a fixed protocol ---------------
+perplexity:
+  corpus: wikitext-2-raw
+  split: test             # full raw test split, ~289K tokens
+  license: CC BY-SA 3.0
+  window: 1024
+  stride: 512
+  bos_per_window: true    # <bos> prepended to EVERY window
+  dtype: bfloat16
+  attention_impl_gemma2: eager   # Gemma-2 has attention-logit softcapping
+  reported_statistic: delta_log_ppl   # log PPL_pruned - log PPL_dense
+  protocol_source: sae-pruning-paper docs/PROTOCOL.md @ 261191804675e2d39d0a265320dbc0bc85afd30a
+
+# WHY THE PROTOCOL IS COPIED VERBATIM RATHER THAN REIMPLEMENTED.
+# That document exists because the original protocol prepended <bos> once to the whole
+# concatenated corpus and evaluated bf16 models in fp16. Their forensic ladder shows
+# restoring per-window <bos> ALONE moves Gemma-2 from 192 to 12 while moving Llama by
+# +0.31 -- Llama is the negative control that made the fault invisible for a whole
+# submission cycle. Wrap saediag/ppl.py::windowed_ppl rather than writing our own, so
+# our numbers come off the same code path as the ones we compare against.
+wrap_upstream_ppl: true
+
+status: FINAL
+pre_registered_on: 2026-09-12
+# Downloading either corpus still requires mode.allow_external_dataset_download.

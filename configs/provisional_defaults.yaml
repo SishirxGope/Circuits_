@@ -1,0 +1,123 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Provisional engineering defaults (PI-approved 2026-08-07)
+# reviewed-by: PENDING
+#
+# Machine-readable copy of docs/HUMAN_DECISIONS.md §3.2 (the provisional values table, Q1-Q9).
+# PROVISIONAL ENGINEERING ONLY: nothing here is final scientific evidence; final PI
+# confirmation required before Stage B freeze / Stage C real runs.
+
+name: provisional_defaults
+approved_by: PI prompt
+approval_date: 2026-08-07
+scope: engineering dry-run and synthetic tests only
+final_pre_registration: false
+remaining_action: final PI confirmation before Stage B freeze / Stage C real runs
+
+q1_band_cutoffs:
+  core: 0.90            # s(e) >= core -> core band
+  noise: 0.10           # s(e) <= noise -> noise band; otherwise contingent
+
+q2_distance:
+  primary: l1                       # L1 over inclusion-frequency vectors
+  alternative: jensen_shannon       # over normalized vectors (ablation sensitivity)
+  pre_registered_for_stage_c: false
+
+q3_ensemble_sizes:
+  synthetic_tests: {B: 4, S: 2, R: 3}
+  tiny_local_dry_run: {B: 4, S: 2, R: 3}
+  proposed_pythia_pilot:            # CONFIRMED 2026-09-14 (Q3): Run_Plan rule on measured timing
+    B: 16
+    S: 5
+    R: 20
+    approved: true                  # IOI pass 42-48 s, greater-than 7.5-7.9 s on the RTX 4060
+    re_apply_rule_for: [pythia410m, gemma2_2b, llama32_1b]   # timings not yet measured
+
+q4_threshold_grid:
+  design: deterministic-seeded-non-nested
+  generated_from: run_seed
+  unit_tested: true
+  final_design: OPEN                # CIRCUS-style grid remains PI-dependent
+
+q5_hf_revisions:
+  # RESOLVED 2026-09-12. Read from the HuggingFace API (each repo's main HEAD) and
+  # asserted by value in tests/test_config_integrity.py. Gating blocks DOWNLOADS, not
+  # metadata, so the two gated pins were readable without credentials — but the licences
+  # still have to be accepted before any real run.
+  gemma_2_2b: c5ebcd40d208330abc697524c919956e692655cf
+  llama_3_2_1b: 4e20de362430cd3b72f300e6b0f18e50e7166e08
+  pythia_160m: 50f5173d932e8e61f858120bcb800b97af589f46
+  pythia_410m: 9879c9b5f8bea9051dcb0e68dff21493d67e9d4f
+  pythia_70m: a39f36b100fe8a5377810d56c3f4789b9c53ac42
+  gpt2_exit_gate: 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  transcoder_gemma_scope: 9250a2d4860ce5ed5c96c14d5882b7d8162809a3
+  transcoder_llama_3_2_1b: c37a82c1ec4cea30d424850d159b17b720ce19e2
+  allow_local_or_mock_model: true
+  pin_required_before_real_run: true
+  gated_licences_accepted: false    # ⚠️ PI: Gemma-2 + Llama-3.2, still blocks downloads
+
+q6_task_datasets:
+  # PRE-REGISTERED 2026-09-12. n=300 prompts per task; the bootstrap resamples
+  # TEMPLATES, because prompts from one template are correlated and resampling prompts
+  # would return CIs that are too narrow (AI_RULES 4.2 wants the scheme in advance).
+  ioi:
+    source: ACDC acdc/ioi/ioi_dataset.py @ bc99ace8, seeded edit of Easy-Transformer @ ea15315d (Wang et al., arXiv:2211.00593)
+    # CORRECTED 2026-09-14: said "transformer_lens IOI generator", which has only 2 templates.
+    n_prompts: 300
+    n_templates: 30           # 15 BABA + 15 ABBA, verified from source 2026-09-12
+  greater_than:
+    # CORRECTED 2026-09-12: the published task is a YEAR-SPAN completion,
+    # "The {noun} lasted from the year {year1} to ", NOT day-of-month.
+    source: ACDC acdc/greaterthan/utils.py::get_year_data
+    n_prompts: 300
+    n_templates: 120          # one surface template x 120 NOUNS. CORRECTED 2026-09-14: was 26,
+                              # a count of LINES in the upstream list, not of nouns.
+  docstring:
+    source: ACDC acdc/docstring/prompts.py @ bc99ace8   # VERIFIED 2026-09-14: MIB has no docstring task
+    resampling_unit: prompt_stratified_by_style        # PI 2026-09-14: only 2 styles, so 'template' gives n=2
+    generator_ported: false
+    n_prompts: 300
+    n_templates: null
+  bootstrap_resampling_unit: template   # ioi (template) and greater_than (noun); docstring overrides above
+  prepend_bos: false                    # PI 2026-09-14: matches the ACDC/EAP task setups
+  external_download: true     # gated by mode.allow_external_dataset_download
+  claims_published_behavior: false
+  real_datasets: OPEN
+
+q7_calibration:
+  # PRE-REGISTERED 2026-09-12. TWO corpora: calibration and perplexity are different
+  # datasets in the reference work, and conflating them breaks the C5 comparison.
+  calibration_corpus: fineweb-edu           # ODC-BY
+  calibration_tokens: 300000
+  calibration_seed: 7                       # reproducing their masks needs the SEED
+  perplexity_corpus: wikitext-2-raw-test    # CC BY-SA 3.0
+  perplexity_window: 1024
+  perplexity_stride: 512
+  perplexity_bos_per_window: true
+  use: synthetic-calibration
+  external_download: false
+  real_datasets: OPEN
+
+q8_tracker:
+  # PRE-REGISTERED 2026-09-12: Weights & Biases, with local run_meta.json remaining the
+  # SOURCE OF RECORD. A tracker is an extra sink, not a dependency -- if W&B is
+  # unreachable the run still completes and is still reproducible from run_meta.json +
+  # the resolved config hash. Chosen because runs happen on a different machine than
+  # the one the paper is written on, which is exactly what a web dashboard is for.
+  tracker: wandb
+  tracker_is_source_of_record: false
+  offline_runs_still_valid: true
+  source_of_record: local-json-run_meta
+  cloud_trackers: optional-future-integration
+  network_logging: false
+
+q9_upstream_pins:
+  # RESOLVED 2026-09-12. circuit_tracer read from the GitHub API ref for tag v0.5.2.
+  # sae_pruning_paper is INFERRED from the local fork's contents (the fork is not a git
+  # repo); derivation + the one outstanding check are in HUMAN_DECISIONS.md §3.3.
+  circuit_tracer: 8f1e2438df612464e229e44c4a00ff637bf9379b
+  circuit_tracer_url: https://github.com/decoderesearch/circuit-tracer
+  sae_pruning_paper: 261191804675e2d39d0a265320dbc0bc85afd30a
+  sae_pruning_paper_url: https://github.com/hecboar/sae-pruning-paper
+  sae_pruning_paper_pin_is_inferred: true
+  licenses_verified_locally: true
+  provenance: docs/HUMAN_DECISIONS.md §3.3 (upstream repositories table)
+  artifact_packaging_blocked: false

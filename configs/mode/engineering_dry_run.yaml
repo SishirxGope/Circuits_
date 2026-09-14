@@ -1,0 +1,21 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Engineering dry-run mode config (PI provisional unblock)
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING ONLY (docs/HUMAN_DECISIONS.md §3.2):
+# synthetic/mock models, synthetic tasks, provisional distance + ensemble, local
+# JSON tracking, no model download, no external dataset download, no Stage B freeze,
+# no Stage C real compression, no frozen/ writes.
+
+name: engineering_dry_run
+allow_synthetic_models: true
+allow_mock_models: true
+allow_synthetic_tasks: true
+allow_provisional_defaults: true
+allow_unknown_upstream_commits: warning      # Q9 UNKNOWN_LOCAL_FORK: warn, never block
+allow_null_hf_revision: warning              # Q5 revision null: warn, never block
+allow_stage_b_freeze: false
+allow_stage_c_real_compression: false
+allow_frozen_writes: false
+allow_model_download: false
+allow_external_dataset_download: false
+tracker: local-json

@@ -1,0 +1,54 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Initialize task configs
+# reviewed-by: PENDING
+#
+# IMMUTABILITY: files under configs/ may not be edited once any experiment references
+# them (AI_RULES.md 1.2). All PLACEHOLDER values must be fixed and justified before
+# Stage A (AI_RULES.md 2.3).
+
+name: greater_than
+family: greater-than
+# Reference circuit: the greater-than circuit (Hanna et al. 2023), as operationalised
+# in ACDC (Conmy et al., NeurIPS 2023). Sanity anchor for the extraction stack; deltas
+# are measured against our own Stage-A dense ensemble (CLAUDE.md §6 caveat).
+#
+# ⚠️ CORRECTION 2026-09-12. HUMAN_DECISIONS.md Q6 described this task as a DAY-OF-MONTH
+# construction, "The {day} of {month} is" -> next-token day. That is not the published
+# task. ACDC's acdc/greaterthan/utils.py builds:
+#
+#     template = "The {noun} lasted from the year {year1} to "
+#
+# i.e. a YEAR-SPAN completion: the model must emit a two-digit year suffix greater than
+# the one given, scored by greaterthan_metric over suffixes yearend+1..99. Verified by
+# reading the source on 2026-09-12, not from memory. Extracting a circuit on a
+# day-of-month task and calling it "the greater-than circuit" would not be comparable
+# to the published one, which is the whole point of using it as an anchor.
+dataset: greater-than-year-spans-acdc
+dataset_source: ACDC acdc/greaterthan/utils.py::get_year_data (Conmy et al., NeurIPS 2023)
+dataset_license: MIT (generator); prompts are synthetic template text -- no PII
+template: "The {noun} lasted from the year {year1} to "
+n_prompts: 300
+n_templates: 120                    # one surface template x 120 NOUNS. CORRECTED 2026-09-14:
+                                    # this said 26, which was a count of LINES in the upstream
+                                    # list (several nouns per line), not of nouns - so it understated
+                                    # the resampling units ~4.6x. 112/120 are single tokens under
+                                    # Pythia. The noun is the prompt-bootstrap resampling unit.
+max_seq_len: 32
+attribution_target: year_suffix_logits      # PLACEHOLDER - confirm TargetSpec against circuit-tracer targets API
+answer_type: token
+seed: 0
+prepend_bos: false                  # PRE-REGISTERED 2026-09-14 (PI): no BOS, matching the ACDC/EAP
+                                    # task setups. Decided on principle: a dense-model check showed
+                                    # the tasks move in OPPOSITE directions with BOS, so the data
+                                    # favoured neither. The Q7 BOS-per-window rule is for perplexity.
+bootstrap_resampling_unit: template
+pi_confirmed: true                  # Q6 pre-registered 2026-09-12
+pre_registered_on: 2026-09-12
+# Q6 PRE-REGISTERED 2026-09-12 (PI-approved).
+#   n_prompts = 300 (Run_Plan recommends 200-500; attribution cost is linear in
+#     prompts and is then multiplied by S and by (1 + R) in Stage B).
+#   bootstrap_resampling_unit = template. Prompts generated from one template are
+#     CORRELATED, so resampling prompts would treat correlated draws as independent
+#     and return CIs that are too narrow. AI_RULES 4.2 requires the scheme in advance.
+#     NOTE: this is the PROMPT bootstrap. The CSI bootstrap axes (over B, S, r) are a
+#     separate open item -- see HUMAN_DECISIONS.md "Also open, not numbered".
+

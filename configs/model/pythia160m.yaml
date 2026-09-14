@@ -1,0 +1,26 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Initialize model configs
+# reviewed-by: PENDING
+#
+# Secondary model (CLAUDE.md §6): dense threshold sweeps + seed replication on the
+# RTX 4060; Stage-B null characterization happens here FIRST to debug the null
+# pipeline cheaply (ARCHITECTURE.md §5). IMMUTABILITY per AI_RULES.md 1.2.
+
+name: pythia-160m
+hf_id: EleutherAI/pythia-160m
+hf_revision: 50f5173d932e8e61f858120bcb800b97af589f46   # Q5 PINNED 2026-09-12 from the HF API (main HEAD)
+n_params: 160M
+d_model: 768                       # VERIFIED 2026-09-12 against config.json at the pinned sha
+n_layers: 12                       # VERIFIED 2026-09-12 against config.json at the pinned sha
+n_heads: 12                        # VERIFIED 2026-09-12 against config.json at the pinned sha
+head_dim: 64                       # VERIFIED 2026-09-12 against config.json at the pinned sha
+context_length: 2048               # VERIFIED 2026-09-12 against config.json at the pinned sha
+dtype: float32                     # RESOLVED 2026-09-14 (PI): attribution passes AND weights.
+                                   # Pythia is fp16-trained, so the fork protocol's bf16 rationale
+                                   # (match the training dtype) never applied to it. fp32 gives exact
+                                   # EAP gradients - non-circuit IOI edge scores have std 0.0061
+                                   # (arXiv:2310.10348 Fig. 3) - and puts the Stage B matched-magnitude
+                                   # norms on unrounded weights. The Q7 perplexity protocol stays bf16.
+backend: transformerlens
+transcoder_set: null               # no circuit-tracer transcoder set exists for Pythia; dense-node pipeline only
+sae_layer: null                    # no published feature audit on this model; not a C5 anchor
+roles: [secondary]

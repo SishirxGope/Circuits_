@@ -1,0 +1,31 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Create decompose (band cutoff) config group
+# modified: [AI-GEN] agent=Claude date=2026-09-12 task=Q1 pre-registration (CIRCUS taxonomy)
+# reviewed-by: PENDING
+#
+# Q1 PRE-REGISTERED 2026-09-12 (PI-approved): CIRCUS's own taxonomy, adopted verbatim
+# and cited rather than argued for -- arXiv:2603.00523 section 3.2, "Circuit taxonomy":
+#
+#     core        s(e) = 1        present in EVERY view (CIRCUS's C_1)
+#     contingent  0.5 <= s(e) < 1
+#     noise       s(e) < 0.5      "flagged for rejection"
+#
+# Know what this buys. A core defined as strict consensus is SMALL: CIRCUS reports
+# 2.5% of union edges at s = 1 and 73% below 0.5 at B = 3. It is also high quality --
+# edges surviving all 25 configs carry ~70x the mean influence of single-config edges.
+# A small, heavily-loaded core is the intended behaviour, not a bug, and per-cell CIs
+# on "core size" will be wide. Budget for that in Q3.
+#
+# THE STRICT BOUNDARY MATTERS. CIRCUS puts s = 0.5 in the CONTINGENT band, so the
+# noise test is "< 0.5", not "<= 0.5". Under an inclusive comparison the only way to
+# encode that is (ceil(B/2) - 1)/B -- 7/16 at B = 16 -- which silently hard-codes B
+# into a config whose name never mentions B, and changes meaning if B changes.
+# noise_strict lets this file state the honest 0.5 and stay B-independent.
+
+name: final
+core_threshold: 1.0      # s(e) >= 1.0  <=>  s(e) == 1  (CIRCUS C_1, strict consensus)
+noise_threshold: 0.5     # with noise_strict: true, the test is s(e) < 0.5
+noise_strict: true       # CIRCUS reading: s = 0.5 is CONTINGENT, not noise
+source: CIRCUS arXiv:2603.00523 section 3.2 "Circuit taxonomy"
+status: FINAL
+final_confirmed: true
+pre_registered_on: 2026-09-12

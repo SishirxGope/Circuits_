@@ -1,0 +1,17 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Provisional ensemble config: B=4, S=2, R=3 (dry-run only)
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING DEFAULT (docs/HUMAN_DECISIONS.md Q3/Q4 + §3.2):
+#   B=4, S=2 (R=3 lives in configs/null/placeholder.yaml override for dry runs).
+#   threshold_grid: null -> generated deterministically from the run seed by
+#   src/science/threshold_grid.py (seeded non-nested grid, unit-tested).
+# The proposed Pythia pilot (B=16, S=5, R=20, configs/ensemble/default.yaml) remains
+# PROPOSED, NOT approved for real runs. No large ensembles without separate PI approval.
+
+name: provisional_b4_s2_r3
+B: 4
+S: 2
+configset: B4xS2
+pi_confirmed: false                # final PI confirmation still pending (Q3)
+provisional: true
+threshold_grid: null               # seeded non-nested grid generated from run seed (Q4)

@@ -1,0 +1,122 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1.5cm,top=1.6cm,bottom=1.6cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem,multirow}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+\setlist[enumerate]{label=(\arabic*),leftmargin=2.4em,labelsep=0.6em,itemsep=2pt,parsep=0pt,topsep=3pt}
+\renewcommand{\arraystretch}{1.12}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt plus 1pt}
+\setlength{\textfloatsep}{6pt plus 2pt}
+\setlength{\intextsep}{6pt plus 2pt}
+\setlength{\abovecaptionskip}{3pt}
+\setlength{\belowcaptionskip}{3pt}
+\setlength{\tabcolsep}{4pt}
+\makeatletter
+\renewcommand\section{\@startsection{section}{1}{\z@}{-1.6ex plus -.5ex}{0.7ex plus .2ex}{\normalfont\large\bfseries}}
+\renewcommand\subsection{\@startsection{subsection}{2}{\z@}{-0.8ex plus -.2ex}{0.4ex plus .2ex}{\normalfont\normalsize\bfseries}}
+\makeatother
+\begin{document}
+\begin{center}
+{\Large\bfseries Do Circuits Survive Compression? A Null-Model Audit of Circuit Stability Under Quantization and Pruning}\\[2pt]
+{\normalsize Supratik Bhowal --- AAAI Undergraduate Consortium}\\[2pt]
+{\small Progress Report: Methodology, Results, Future Scope}\\[2pt]
+{\small \today}
+\end{center}
+\begin{abstract}\noindent Interpretability has measured representations under compression but not computation itself, and the one prior circuit claim is qualitative with no noise floor. We built a null-first Algorithm-1 pipeline with Circuit Stability Index (CSI), two-level comparison, and freeze-as-preregistration, validated end-to-end on synthetic tasks with 459 tests passed and 1 skipped and frozen null still false. Reproduced baselines show dense perplexity 8.21 for Gemma-2-2B and 9.28 for Llama-3.2-1B, Wanda over magnitude 0.794 vs.\ 0.210 at 30\% sparsity, and fixed-dictionary Jaccard correlation $-0.975$ with output damage; synthetic check gives CSI 0.333 [0.25,0.40]. No causal confirmation yet: CSI $\approx 1$ will mean noise, CSI $\gg 1$ selective damage, CSI $< 1$ gentler than noise.
+\end{abstract}
+\section{Introduction}
+Threshold choice changes the circuit by $\sim$40$\times$ in size and dense vs.\ 75\%-sparse graphs agree at routing level 0.666 vs.\ chance 0.199 but fall to chance at exact-edge level 0.163 vs.\ 0.126 \cite{parekh2026circus,sheng2026circuit}. Patching mixes direct and interaction effects as NIE$=$PIE$+$INT \cite{vaidyanathan2026curse}. We audit computation, not features, on Gemma-2-2B, Llama-3.2-1B and Pythia with IOI, greater-than and docstring tasks, testing $\displaystyle s(e)=\#\{\text{graphs containing }e\}/|B||S|$, $D(c)=\mathrm{Dist}(f_{\mathrm{dense}},f_{c})$, $\mathrm{CSI}(c,T)=D(c)/\mathrm{median}(D_{\mathrm{null}}(c))$.
+\section{Methodology}
+\begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelwidth=0pt,labelsep=0pt,itemsep=4pt,parsep=0pt,topsep=3pt]
+\item[Null-first pipeline.] Stages run in fixed order with hash guards.
+\begin{enumerate}
+\item \textbf{Reference} --- Stage A builds dense $s(e)$ over $B$ configs $\times$ $S$ seeds.
+\item \textbf{Freeze} --- Stage B builds $D_{\mathrm{null}}$ from $R$ nulls then freezes irreversibly; Stage C is blocked without frozen hash.
+\item \textbf{Measure} --- Stage C computes $D(c)$ and CSI at both levels; Stage D runs causal patching and cross-audit.
+\end{enumerate}
+\item[Three nulls and ensemble.] Controls separate damage from noise.
+\begin{enumerate}
+\item \textbf{Magnitude} --- random $\Delta W$ matched per-tensor Frobenius norm to compression $\Delta W$.
+\item \textbf{Perplexity} --- alternate family tuned to same perplexity within 0.05.
+\item \textbf{Ensemble} --- $B{=}16$, $S{=}5$, $R{=}20$ pilot (provisional $B{=}4$, $S{=}2$, $R{=}3$) over non-nested threshold grid.
+\end{enumerate}
+\item[Extraction and stability.] Two pipelines plus dictionary-free variant.
+\begin{enumerate}
+\item \textbf{Graphs} --- attribution-patching graph, edge-pruning graph, and dense-node variant; thresholds node 0.8 and edge 0.98.
+\item \textbf{Frequencies} --- report $s(e)\in[0,1]$ vector with hypotheses
+\begin{enumerate}[label=(H\arabic*)]
+\item \textbf{Selective} --- CSI $\gg 1$ with bootstrap CI over $B,S,r$ excludes 1.
+\item \textbf{Noise} --- CSI $\approx 1$ indistinguishable from null.
+\end{enumerate}
+\end{enumerate}
+\item[Distances, levels, and audits.] All comparisons carry uncertainty.
+\begin{enumerate}
+\item \textbf{Distance} --- primary L1 over union, ablation Jensen-Shannon, plus normalized L1; CSI with 1000 bootstraps.
+\item \textbf{Levels} --- exact-edge overlap and routing-head overlap with strict guard on empty projection.
+\item \textbf{Audit} --- Spearman cross-audit, threshold sweep at 0.0--0.9, chance floor, Benjamini-Hochberg at $q{=}0.05$.
+\end{enumerate}
+\end{description}
+\section{Results}
+\textbf{Reproduction.} Corrected dense perplexity is 8.21 for Gemma-2-2B, 9.99 for Gemma-3-1B and 9.28 for Llama-3.2-1B; magnitude 50\% drives Gemma-2-2B to 377.03 and Llama-3.2-1B to 2412.44 while Wanda 30\% stays at 8.82 and 10.65; downstream accuracy falls from 0.759 dense to 0.325 at magnitude 50\% and 0.627 at Wanda 50\% (Table~1); \textbf{Wanda 30\% keeps MNN 0.794 vs.\ magnitude 0.210 and Jaccard 0.591 vs.\ 0.317}; seed MNN floor is 0.0273 and Kendall $W$ is 0.9416.
+
+\textbf{Divergence (novelty).} Novel code is CSI with bootstrap, matched-magnitude and matched-perplexity harnesses, $s(e)$ bands, routing level, chance floor, interaction flag $|$INT$|>0.5\max$, and freeze-as-preregistration over 50 science nodes, 33 experiment nodes and 28 compression nodes in 22 communities; prior level disagreement is reproduced as exact-edge 0.163/0.142 vs.\ chance 0.126/0.117 at $p{=}0.040/0.106$ and routing 0.666/0.554 vs.\ 0.199/0.185 at $p<0.001$ with cross-seed Jaccard 0.363 (Table~1 and Table~2).
+
+\textbf{SPR.} Synthetic plumbing run $B{=}4$, $S{=}2$, $R{=}3$ gives exact CSI 0.333 [0.25,0.40] with $D{=}0.25$ and null median 0.75 and routing CSI 0.0 [0,0] with $D{=}0.0$; chance exact Jaccard is 0.714 vs.\ floor 0.0 [0,0.091] at $p{=}0.002$ and routing 1.0 vs.\ 0.0 at $p{=}0.002$; calibration shows fixed-dictionary Jaccard $\rho{=}-0.975$ [-1.00,-0.873], MNN $-0.684$ [-0.888,-0.276] and fragility $-0.032$ [-0.473,0.514] (Table~2); no real CSI is measured yet and cross-audit stays pending.
+\begin{table}[!ht]
+\centering\footnotesize
+\caption{Rows list (model, method, sparsity) cells; columns list perplexity with log change, MNN survival, and fixed-dictionary Jaccard.}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\multicolumn{3}{c}{Condition} & \multicolumn{3}{c}{Feature damage} \\
+\cmidrule(lr){1-3} \cmidrule(lr){4-6}
+Model & Method & $s$ & PPL & MNN & Jacc. \\
+\midrule
+\multirow{4}{*}{Gemma-2-2B} & magn. & 0.3 & 13.08 & 0.210 & 0.317 \\
+& magn. & 0.5 & 377.03 & 0.002 & 0.140 \\
+& Wanda & 0.3 & 8.82 & \textbf{0.794} & 0.591 \\
+& Wanda & 0.5 & 13.47 & 0.148 & 0.314 \\
+\multirow{3}{*}{Llama-3.2-1B} & magn. & 0.5 & 2412.44 & 0.511 & --- \\
+& Wanda & 0.3 & 10.65 & 0.850 & --- \\
+& Wanda & 0.5 & 33.35 & 0.709 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{table}[!ht]
+\centering\footnotesize
+\caption{Rows list diagnostics; columns list Spearman correlation with log-perplexity change, bootstrap interval, and sample size.}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\multicolumn{1}{c}{Diagnostic} & \multicolumn{3}{c}{Correlation with output damage} \\
+\cmidrule(lr){2-4}
+& $\rho$ & 95\% CI & $n$ \\
+\midrule
+Fixed-dict Jacc. & \textbf{-0.975} & [-1.00,-0.873] & 17 \\
+Downstream acc. & -0.906 & [-0.991,-0.632] & 16 \\
+MNN & -0.684 & [-0.888,-0.276] & 17 \\
+FVU & 0.556 & [0.030,0.918] & 17 \\
+Fragility & -0.032 & [-0.473,0.514] & 17 \\
+\bottomrule
+\end{tabular}
+\end{table}
+\section{Future Scope}
+\begin{enumerate}
+\item \textbf{Pins and prompts} (data, 4 h) --- record HF revisions, 200--500 prompts per task, and WikiText-2 window 1024 stride 512 protocol. \\ Why: weight re-upload or template sampling shift voids dense reference. \\ Deliverable: task configs marked confirmed plus passing protocol test.
+\item \textbf{Preregistration fix} (methods, 0.5 h) --- set L1 plus JS as final and resample bootstrap over $B,S,r$. \\ Why: seed-only intervals are too narrow for ensemble variance. \\ Deliverable: 14 distance tests green before freeze.
+\item \textbf{Consensus bands} (methods, 0.5 h) --- set core $s{=}1.0$ and noise $s{=}7/16$ at $B{=}16$ on crossed grid. \\ Why: matches CIRCUS taxonomy and checks Jaccard $\sim$0.33. \\ Deliverable: decompose and grid tests green.
+\item \textbf{Seven-cell run} (compute, 2 weeks) --- RTN INT8/INT4, GPTQ, AWQ, magnitude and Wanda with frozen null. \\ Why: tests selective vs.\ noise vs.\ gentler predictions head to head. \\ Deliverable: CSI table with CIs at both levels.
+\item \textbf{Causal audit and paper} (analysis, 2 weeks) --- grouped patching with INT split, cross-audit, sweep, and AAAI-UC draft. \\ Why: links movers to behavior and ships reusable harness. \\ Deliverable: camera-ready draft plus one-command rebuild.
+\end{enumerate}
+\begin{thebibliography}{9}
+\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
+\bibitem{borobia2026pruning} A.~Borobia et al., \textit{How Pruning Reshapes Features}, arXiv:2603.25325, 2026.
+\bibitem{duan2026perplexity} E.~Duan, \textit{Perplexity Can Miss SAE Feature Damage Under Quantization}, arXiv:2606.03002, 2026.
+\bibitem{parekh2026circus} S.~Parekh, \textit{CIRCUS: Circuit Consensus under Uncertainty via Stability Ensembles}, arXiv:2603.00523, 2026.
+\bibitem{sheng2026circuit} S.~Sheng and F.~Fu, \textit{Circuit Claims Depend on What Is Extracted and How Compared}, arXiv:2607.18921, 2026.
+\bibitem{vaidyanathan2026curse} V.~Vaidyanathan et al., \textit{Curse of Multiple Mediators: Hidden Interaction Effects in Activation Patching}, arXiv:2606.27510, 2026.
+\bibitem{sun2024wanda} M.~Sun et al., \textit{Wanda: Simple Effective Pruning}, arXiv:2306.11695, 2024.
+\bibitem{frantar2023gptq} E.~Frantar et al., \textit{GPTQ}, arXiv:2210.17323, 2023.
+\end{thebibliography}
+\end{document}

@@ -1,0 +1,68 @@
+# [AI-GEN] agent=Claude date=2026-09-12 task=Q10/Q11 pre-registration
+# reviewed-by: PENDING
+#
+# Q10 and Q11 PRE-REGISTERED 2026-09-12 (PI-approved). Replaces comparison/provisional
+# (both null = OPEN). See docs/HUMAN_DECISIONS.md Q10/Q11 and docs/Run_Plan.md Part 2.
+
+name: final
+
+# --------------------------------------------------------------------- Q10
+# What the COARSE comparison level means (proposal 2.4, claim C2).
+#
+# circuit-tracer emits four node kinds and NONE is an attention head, so the
+# routing-head level used by arXiv:2607.18921 does not exist in pipeline A. We
+# substitute LAYER routing: "which layers route the computation".
+#
+# Applied by src/extraction/node_ids.py::project_level2 and consumed by
+# src/science/two_level.py::project_to_coarse_level -- one definition, one place.
+level2_scheme: layer
+
+# THE FALSIFICATION CONDITION, PRE-REGISTERED WITH THE CHOICE.
+#
+# arXiv:2607.18921 does not report two levels, it reports three -- structural,
+# semantic, routing -- and its own result is that SEMANTIC coarsening is numerically
+# indistinguishable from structural (Jaccard@10 0.163 vs 0.163, identical to three
+# decimals in every split). Only routing-head separated (0.666 vs 0.163). The lesson
+# is sharper than "pick a coarser level": a coarsening that does not cut along a
+# functional boundary buys nothing. Their structural bundle ID already groups by
+# layer, which puts "group by layer" on the indistinguishable side of that ledger.
+#
+# So: if the coarse-level Jaccard lies within the bootstrap CI of the exact-edge
+# Jaccard, the second level is declared VACUOUS for pipeline A and reported as a
+# negative methodological result -- NOT presented as a second level that happens to
+# agree. Implemented in src/science/two_level.py::coarse_level_verdict.
+#
+# This costs nothing if the levels separate, and if they do not it is itself a
+# contribution: the two-level reporting practice arXiv:2607.18921 recommends cannot
+# be instantiated in the dominant attribution-graph tool, because its node basis has
+# no routing structure to coarsen onto.
+level2_falsification_condition: coarse_jaccard_within_exact_edge_bootstrap_ci
+level2_falsification_implemented: src/science/two_level.py::coarse_level_verdict
+
+# --------------------------------------------------------------------- Q11
+# Do edges aggregate over token positions? AGGREGATE.
+#
+# The usual argument -- it matches the edges.parquet schema and how people talk about
+# circuits -- is true but weak; schemas can change. The decisive argument is the
+# CHANCE FLOOR. chance_floor.candidate_edge_count requires N explicitly, and going
+# position-specific multiplies the edge universe by n_pos (~15-20 for IOI prompts).
+# A 15-20x larger universe pushes the random-overlap baseline down, making EVERY
+# overlap look impressively above chance for purely combinatorial reasons.
+# arXiv:2607.18921's candidate sets are 37 (structural) and 31 (routing) -- small
+# universes, honest baselines. Inflating the universe is the single easiest way to
+# accidentally manufacture a significant result, and this paper's whole argument is
+# against accidentally manufacturing significant results.
+#
+# Aggregating also keeps s(e) interpretable: with positions collapsed, "this edge
+# appeared in 12 of 16 views" is a statement about the computation. Position-specific,
+# it is partly a statement about prompt length.
+position_policy: aggregate
+
+# The sentence node_ids.position_policy_is_pi_owned(False) returns must appear in the
+# paper: aggregation asserts the circuit is the same computation wherever in the
+# prompt it fires. That is a modelling claim, not a schema detail.
+position_policy_paper_sentence_required: true
+
+status: FINAL
+final_pre_registration: true
+pre_registered_on: 2026-09-12

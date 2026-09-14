@@ -1,0 +1,75 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Create ensemble config group
+# reviewed-by: PENDING
+#
+# Ensemble grid: B non-nested threshold/pruning configs x S seeds (CIRCUS,
+# arXiv:2603.00523; proposal §2.1c). IMMUTABLE once referenced by a run
+# (AI_RULES.md 1.2).
+#
+# B/S starting point quoted from ARCHITECTURE.md §5 ("suggested starting point:
+# B=16, S=5, R=20 on Pythia; halve or hold for primaries based on measured
+# per-attribution wall time in week 1").
+
+name: default
+B: 16                # pruning-threshold configs per cell
+                     # ⚠️ TODO [QUESTION FOR PI]: fix B before Stage A (ARCHITECTURE.md §5)
+S: 5                 # seeds per cell
+                     # ⚠️ TODO [QUESTION FOR PI]: fix S before Stage A (ARCHITECTURE.md §5)
+# Run-name configset token (CLAUDE.md §4); validated against B/S at run time.
+# Interpolation is ROOT-relative after Hydra composition, so it must be
+# ${ensemble.B}, not ${B} (a group-local ${B} resolves against the root config,
+# where no top-level B exists, and raises InterpolationKeyError). Fixed 2026-08-08.
+configset: B${ensemble.B}xS${ensemble.S}
+
+# false until the PI confirms B/S/R for real Stage A runs (HUMAN_DECISIONS.md Q3).
+# config_guard.py treats pi_confirmed != true as an OPEN question.
+# Q3 CONFIRMED 2026-09-14: B = 16, S = 5, R = 20. Run_Plan's rule, stated before any timing
+# existed, applied to the measured non-evidence pilot on the RTX 4060 (one attribution pass:
+# IOI 42-48 s, greater-than 7.5-7.9 s; both under the 2-minute line -> S = 5, R = 20).
+# Applied on the PI's instruction to settle the remaining decisions. Re-apply the same rule
+# to measured timings for Pythia-410M and the primaries before their runs.
+pi_confirmed: true
+
+# Q4 PRE-REGISTERED 2026-09-12 (PI-approved): the ANTI-DIAGONAL grid.
+#
+# src/science/threshold_grid.py::generate_anti_diagonal_grid(B) walks node LOW->HIGH
+# while walking edge HIGH->LOW and pairs them index-by-index, so no config can
+# dominate another and the set is non-nested BY CONSTRUCTION (provable, not merely
+# sampled). A pure function of B: same grid on any machine, in any run, forever.
+#
+# WHY NOT A CROSSED PRODUCT. The obvious reading of CIRCUS section 3.2 -- cross four
+# node levels with four edge levels for B = 16 -- does not work, and the check is
+# worth keeping here because it is not obvious. Order threshold configs by dominance
+# and a k x k Cartesian product is a grid poset, whose largest antichain has exactly
+# k members. So a 4x4 product gives 16 views of which 84 of the 120 pairs are NESTED,
+# including CIRCUS's own counter-example (0.6,0.95) < (0.8,0.98) < (0.9,0.99).
+# Nesting collapses consensus onto the loosest view and inflates every s(e).
+# B non-nested views require B distinct levels per axis. Verified 2026-09-12.
+#
+# Ranges are anchored on published values, not invented: circuit-tracer's CLI
+# defaults are node 0.8 / edge 0.98, and CIRCUS's published non-nested examples are
+# (0.6, 0.99) and (0.9, 0.95). The swept box is their convex hull, so the upstream
+# default lies inside it.
+threshold_grid:
+  design: anti_diagonal
+  node_range: [0.6, 0.9]     # walked LOW -> HIGH
+  edge_range: [0.99, 0.95]   # walked HIGH -> LOW (opposite direction)
+  generator: src/science/threshold_grid.py::generate_anti_diagonal_grid
+  source: CIRCUS arXiv:2603.00523 section 3.2 "Non-nesting principle"
+  pre_registered_on: 2026-09-12
+
+# Two CIRCUS diagnostics to run on Stage A output BEFORE freezing -- they are the
+# evidence the grid works, not decoration:
+#   mean pairwise Jaccard across the B views: CIRCUS gets 0.33 (Gemma) / 0.35 (Llama).
+#     Near 1.0 means the configs are near-duplicates.
+#   "Match" = how often consensus equals a single view: CIRCUS gets 8/50 and 0/20.
+#     Match ~ 100% of prompts IS the nesting artifact -- stop and fix the grid.
+grid_diagnostics_required_before_freeze: true
+
+# DENSE-NODE DIAGNOSTICS, 2026-09-14 (Pythia-160M, seeds 0-1, ioi + greater_than). This note
+# changes neither B nor the grid. On dense-node EAP scores the grid yields largely NESTED views
+# (82-116 of 120 view pairs nested; consensus 90-100% of the smallest view), although the stop
+# rule above (Jaccard near 1.0, Match ~100%) is not triggered. A sweep of edge ranges, run
+# exactly as pre-registered BEFORE evaluation, selected nothing. PI decision: keep this grid
+# for EVERY pipeline and report both findings - see
+# docs/preregistration/2026-09-14_dense_node_grid_{criterion.md,sweep_results.json,outcome.md}.
+dense_node_nesting_must_be_reported: true

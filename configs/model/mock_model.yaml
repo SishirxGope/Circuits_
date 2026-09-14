@@ -1,0 +1,17 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Mock model config (Q5 provisional: local/mock allowed for dry-runs)
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING DEFAULT (HUMAN_DECISIONS.md Q5): revision null for dry-run
+# configs; allow_local_or_mock_model true; pin_required_before_real_run true.
+# Real model runs remain blocked until the PI provides or approves exact HF
+# revisions. This config is NOT a scientific object.
+
+name: mock
+hf_id: null
+hf_revision: null
+synthetic: true
+n_layers: 4
+n_heads: 2
+d_model: 8
+backend: mock
+roles: [synthetic]

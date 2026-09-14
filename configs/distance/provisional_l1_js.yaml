@@ -1,0 +1,35 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Provisional distance config: L1 primary + Jensen-Shannon alternative
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING DEFAULT (docs/HUMAN_DECISIONS.md Q2 + §3.2):
+#   primary: L1 over inclusion-frequency vectors
+#   alternative: Jensen-Shannon over normalized vectors
+# Implementations: src/science/distances.py. NOT pre-registered for Stage C until the
+# PI confirms (pre-registration is a scientific decision).
+
+name: l1
+alternative: jensen_shannon
+status: FINAL
+pre_registered_for_stage_c: true
+pre_registered_on: 2026-09-12
+
+# Q2 PRE-REGISTERED 2026-09-12 (PI-approved).
+#
+# primary = L1 over inclusion-frequency vectors. L1 is total inclusion-frequency
+#   change with no hidden assumption, and it is the only one of the two that can see
+#   a uniform loss of inclusion mass. Heavy pruning genuinely does shrink that mass
+#   (the pruning audit shows fixed-dict Jaccard collapsing 0.591 -> 0.048 between
+#   Wanda s=0.3 and magnitude s=0.5 on matched models), so a mass-blind metric would
+#   report "nothing happened" in exactly the cells where the most happens.
+#
+# alternative = Jensen-Shannon over normalised vectors. A real second lens rather
+#   than a box-tick: normalising isolates SHAPE from MASS, so the ablation answers
+#   "do the conclusions depend on which edges moved, or on how many?"
+#
+# also_report = normalised L1 (L1 / |union of edge ids|). L1 scales with circuit
+#   size, and cells WILL differ in edge count because pruning changes how many edges
+#   survive, so the raw number is not comparable across cells. This is a monotone
+#   rescaling of the primary, not a third decision. NOT YET IMPLEMENTED: it needs
+#   src/science/distances.py, which is novelty-zone and not yet approved for edit.
+also_report: normalized_l1
+also_report_implemented: false

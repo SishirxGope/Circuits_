@@ -1,0 +1,16 @@
+# [AI-GEN] agent=Claude date=2026-08-08 task=Provisional null config R=3 so the Hydra composition matches experiments/dry_run_stage_a.py
+# reviewed-by: PENDING
+#
+# PROVISIONAL ENGINEERING DEFAULT (docs/HUMAN_DECISIONS.md Q3 + §3.2):
+#   synthetic/mock tests and tiny local dry-runs use B=4, S=2, R=3.
+# configs/ensemble/provisional_b4_s2_r3.yaml supplies B and S; this file supplies R,
+# so the Hydra entrypoint and experiments/dry_run_stage_a.py compose the SAME R
+# (they disagreed before 2026-08-08: Hydra composed R=20 while the driver used R=3).
+#
+# The proposed Pythia pilot (R=20, configs/nulls/default.yaml) remains PROPOSED,
+# NOT approved for real runs.
+
+name: provisional_r3
+R: 3
+pi_confirmed: false
+provisional: true

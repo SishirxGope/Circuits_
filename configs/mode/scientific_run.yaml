@@ -1,0 +1,23 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Scientific run mode config (strict, final decisions required)
+# reviewed-by: PENDING
+#
+# STRICT MODE: refuses to run while any required question is OPEN. Requires final
+# PI decisions (HUMAN_DECISIONS.md), pinned models, verified datasets, final distance
+# pre-registration, Stage B freeze before Stage C. Default is engineering_dry_run;
+# scientific_run must be EXPLICIT.
+
+name: scientific_run
+allow_synthetic_models: false
+allow_mock_models: false
+allow_synthetic_tasks: false
+allow_provisional_defaults: false
+allow_unknown_upstream_commits: false
+allow_null_hf_revision: false
+allow_stage_b_freeze: true
+allow_stage_c_real_compression: true
+allow_frozen_writes: true
+allow_model_download: true
+allow_external_dataset_download: true
+tracker: local-json   # Q8 (2026-09-12) chose W&B as an ADDITIONAL sink, with run_meta.json
+                      # as source of record. No W&B sink is implemented yet, so this stays
+                      # local-json: writing "wandb" here would claim logging that never happens.

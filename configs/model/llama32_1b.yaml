@@ -1,0 +1,23 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Initialize model configs
+# reviewed-by: PENDING
+#
+# IMMUTABILITY: files under configs/ may not be edited once any experiment references
+# them (AI_RULES.md 1.2). Resolve all TODO [QUESTION FOR PI] / PLACEHOLDER items
+# before Stage A. Architecture numbers below are to be verified against the pinned
+# HF config at Stage A setup (AI_RULES.md 2.2).
+
+name: llama-3.2-1b
+hf_id: meta-llama/Llama-3.2-1B
+hf_revision: 4e20de362430cd3b72f300e6b0f18e50e7166e08   # Q5 PINNED 2026-09-12 from the HF API (main HEAD)
+n_params: 1.2B
+d_model: 2048                      # PLACEHOLDER - verify against pinned HF config
+n_layers: 16                       # PLACEHOLDER - verify against pinned HF config
+n_heads: 32                        # PLACEHOLDER - verify against pinned HF config
+head_dim: 64                       # PLACEHOLDER - verify against pinned HF config
+context_length: 131072             # native context; our tasks cap at task max_seq_len
+dtype: bfloat16                    # PLACEHOLDER - verify eval dtype against fork protocol (docs/PROTOCOL.md)
+backend: transformerlens           # NOTE: fork README: Llama demos not supported on Colab; nnsight fallback may be needed
+transcoder_set: mntss/transcoder-Llama-3.2-1B   # circuit-tracer PLTs for Llama-3.2-1B (fork README)
+transcoder_revision: c37a82c1ec4cea30d424850d159b17b720ce19e2   # Q5 PINNED 2026-09-12
+sae_layer: 8                       # layer audited by ref [1] feature audit (Llama-3.2-1B L8); cross-audit anchor for C5
+roles: [primary]

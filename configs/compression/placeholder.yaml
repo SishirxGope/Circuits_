@@ -1,0 +1,10 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Create compression config group (placeholder)
+# reviewed-by: PENDING
+#
+# Compression grid (proposal §3.2): RTN INT8->INT4, GPTQ, AWQ; magnitude + Wanda
+# 0-60%. One file per grid cell will live in this group (CLAUDE.md §3), used only by
+# Stage C. Nothing is implemented or chosen here yet — Stage C is not in scope until
+# explicitly approved.
+
+name: null
+# ⚠️ TODO [QUESTION FOR PI]: nothing to fix yet; grid cells are created at Stage C.

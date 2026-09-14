@@ -1,0 +1,37 @@
+# [AI-GEN] agent=Claude date=2026-08-09 task=Config surface for Q10/Q11 (the two decisions the circuit-tracer fork forced into the open)
+# reviewed-by: PENDING
+#
+# The comparison-level and edge-identity decisions (docs/HUMAN_DECISIONS.md Q10, Q11).
+# Both are null: config_guard treats null as OPEN, so a scientific_run refuses until
+# the PI records a choice here. Engineering dry-runs are unaffected.
+#
+# WHY THESE EXIST (verified from circuit-tracer-0.5.2 on 2026-08-08):
+#   circuit-tracer's graph has exactly four node kinds — "cross layer transcoder",
+#   "mlp reconstruction error", "embedding", "logit" — and NO attention heads. So
+#   ARCHITECTURE.md §2's L{layer}.H{head} scheme, and the routing-head projection that
+#   depends on it, have nothing to match in a pipeline-A circuit.
+
+name: provisional
+
+# Q10 — what the COARSE comparison level means (proposal §2.4, claim C2).
+# Options + full trade-offs: src/extraction/node_ids.py::LEVEL2_OPTIONS
+#   layer             | "which layers route the computation"  <- recommended
+#   dense_node_heads  | the coarse level is carried by the dense-node pipeline
+#   node_kind         | feature / error / embed / logit (probably too coarse)
+#   feature_family    | NOT a second level — that is Q11
+# ⚠️ TODO [QUESTION FOR PI]: without this, claim C2 is vacuous for pipeline A —
+# the routing-head projection returns {} and every routing-head overlap is 1.0.
+level2_scheme: null
+
+# Q11 — do edges aggregate over token positions?
+#   aggregate          | one edge per component pair, wherever in the prompt it fires
+#                      |   (matches the current edges.parquet schema)  <- recommended
+#   position_specific  | one edge per (component pair, position); needs a `pos` column
+#                      |   in edges.parquet and multiplies the chance-floor universe
+# ⚠️ TODO [QUESTION FOR PI]. The current code aggregates, because the schema has no
+# position column — but that is a modelling claim ("the circuit is the same
+# computation wherever in the prompt it fires") and must be stated in the paper.
+position_policy: null
+
+status: OPEN
+final_pre_registration: false

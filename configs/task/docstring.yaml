@@ -1,0 +1,51 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Initialize task configs
+# reviewed-by: PENDING
+#
+# IMMUTABILITY: files under configs/ may not be edited once any experiment references
+# them (AI_RULES.md 1.2). All PLACEHOLDER values must be fixed and justified before
+# Stage A (AI_RULES.md 2.3).
+
+name: docstring
+family: docstring-completion
+# Reference circuit: docstring-completion task; MIB harness (ICML 2025) per PRD.md §2
+# ("as harness where applicable"). Sanity anchor for the extraction stack; deltas
+# measured against our own Stage-A dense ensemble (CLAUDE.md §6).
+dataset: docstring-mib-harness
+dataset_source: MIB benchmark harness (Mueller et al., ICML 2025); falls back to the
+  original docstring-circuit release if MIB does not cover docstring
+dataset_license: synthetic template code text -- no PII; harness licence to be recorded
+  in data/README.md once the harness is actually fetched
+n_prompts: 300
+n_templates: null                   # ⚠️ NOT INVENTED: depends on which harness supplies
+                                    # the prompts, which is unverified until MIB is
+                                    # fetched. Must be filled before docstring runs.
+max_seq_len: 256                    # PLACEHOLDER - confirm docstring lengths before Stage A
+attribution_target: docstring_logits        # PLACEHOLDER - confirm TargetSpec against circuit-tracer targets API
+answer_type: token
+seed: 0
+# false until PI confirms prompt source + counts (HUMAN_DECISIONS.md Q6);
+# config_guard.py treats pi_confirmed != true as an OPEN question.
+bootstrap_resampling_unit: prompt_stratified_by_style   # PI 2026-09-14. The ACDC docstring generator
+# has only TWO styles (rest, goog) with randomly sampled names, so "template" would give n=2. Prompts
+# are independently seeded draws; stratifying by style keeps the rest/goog mix fixed under resampling.
+# SOURCE VERIFIED 2026-09-14: MIB has no docstring task (its five are IOI, MCQA, Arithmetic, ARC,
+# RAVEL), so Run_Plan's fallback applies: ACDC acdc/docstring/prompts.py @ bc99ace8, MIT.
+# pi_confirmed stays false: the generator is not yet ported or checked under Pythia's tokenizer.
+prepend_bos: false                  # PRE-REGISTERED 2026-09-14 (PI): no BOS, matching the ACDC/EAP
+                                    # task setups. Decided on principle: a dense-model check showed
+                                    # the tasks move in OPPOSITE directions with BOS, so the data
+                                    # favoured neither. The Q7 BOS-per-window rule is for perplexity.
+# ⚠️ Still false: unlike IOI and greater-than, the docstring SOURCE is not yet verified.
+# Run_Plan Step 4 pins it to "MIB if it covers docstring, else the original release" --
+# nobody has checked which. Docstring is the third task and does not block the Pythia
+# pilot, so this is deliberately left open rather than guessed (AI_RULES 2.2).
+pi_confirmed: false
+# Q6 PRE-REGISTERED 2026-09-12 (PI-approved).
+#   n_prompts = 300 (Run_Plan recommends 200-500; attribution cost is linear in
+#     prompts and is then multiplied by S and by (1 + R) in Stage B).
+#   bootstrap_resampling_unit = template. Prompts generated from one template are
+#     CORRELATED, so resampling prompts would treat correlated draws as independent
+#     and return CIs that are too narrow. AI_RULES 4.2 requires the scheme in advance.
+#     NOTE: this is the PROMPT bootstrap. The CSI bootstrap axes (over B, S, r) are a
+#     separate open item -- see HUMAN_DECISIONS.md "Also open, not numbered".
+

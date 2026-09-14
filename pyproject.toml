@@ -1,0 +1,48 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Create minimal project metadata for pytest
+# modified: [AI-GEN] agent=Claude date=2026-08-08 task=Add real dependency declaration so the PI can install the stack in one command
+# reviewed-by: PENDING
+
+[project]
+name = "circuits-under-compression"
+version = "0.1.0"
+description = "Do Circuits Survive Compression? A Null-Model Audit of Circuit Stability Under Quantization and Pruning (AAAI UC)"
+requires-python = ">=3.10"
+
+# Core stack: everything the engineering dry-run and the metric layer need.
+dependencies = [
+  "numpy>=1.24",
+  "pyarrow>=14",            # edges.parquet / freq.parquet / dnull.parquet (ARCHITECTURE.md §2)
+  "hydra-core>=1.3",        # config composition (ARCHITECTURE.md §3) — REQUIRED for the entrypoints
+  "omegaconf>=2.3",
+]
+
+[project.optional-dependencies]
+# Real-model work. Installed only after the PI approves RUN MODEL DOWNLOAD.
+models = [
+  # Pinned EXACTLY (2026-09-14), the library analogue of the Q5 revision pins: these versions
+  # were verified to load Pythia-160M at its pinned sha with bit-identical weights. A different
+  # TransformerLens can change hook placement or config construction, which changes which edges
+  # exist and what EAP scores. torch's CUDA build is platform-specific; install it from the
+  # matching index first (this machine: https://download.pytorch.org/whl/cu126).
+  "torch==2.14.0",
+  "transformers==5.17.0",
+  "transformer-lens==3.9.0",
+  "huggingface-hub==1.31.0",
+]
+# Experiment tracking — pick ONE per docs/HUMAN_DECISIONS.md Q8; the local JSON
+# run_meta.json stays the source of record either way.
+tracking = ["wandb>=0.17"]
+tracking-local = ["mlflow>=2.14"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Test tiers live in the filename, not in a directory (ARCHITECTURE.md §6):
+#   tests/test_<unit>.py                  unit           -> every PR
+#   tests/test_integration_<x>.py         integration    -> nightly
+#   tests/test_regression_<x>.py          regression     -> before any tag / the freeze commit
+# Select a tier with, e.g.:  pytest -k "integration"   /   pytest -k "not integration"
+
+[tool.ruff]
+line-length = 110

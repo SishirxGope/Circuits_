@@ -1,0 +1,22 @@
+# [AI-GEN] agent=OpenCode date=2026-08-07 task=Create null config group
+# reviewed-by: PENDING
+# modified: [AI-GEN] agent=Claude date=2026-08-08 task=group renamed null -> nulls (YAML null-literal bug); name field no longer a YAML null
+#
+# Null constructions (proposal §2.1): matched-magnitude perturbation, matched-
+# perplexity control, seed/threshold ensemble. Implemented in Stage B (src/science/),
+# then FROZEN: frozen/ is append-only and never edited after the freeze commit
+# (AI_RULES.md 1.4). Configs in this group are frozen after Stage B.
+#
+# NOTE on the group name: this directory is `nulls/`, not `null/`. In YAML a bare
+# `null` key is the null literal, so `- null: default` in a Hydra defaults list
+# parses as a None key and the group is silently never composed.
+
+name: default
+R: 20                # null draws per cell
+                     # ⚠️ TODO [QUESTION FOR PI]: fix R before Stage B (suggested start R=20 per ARCHITECTURE.md §5)
+# Q3 CONFIRMED 2026-09-14: B = 16, S = 5, R = 20. Run_Plan's rule, stated before any timing
+# existed, applied to the measured non-evidence pilot on the RTX 4060 (one attribution pass:
+# IOI 42-48 s, greater-than 7.5-7.9 s; both under the 2-minute line -> S = 5, R = 20).
+# Applied on the PI's instruction to settle the remaining decisions. Re-apply the same rule
+# to measured timings for Pythia-410M and the primaries before their runs.
+pi_confirmed: true   # R is part of Q3 (B/S/R)

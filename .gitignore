@@ -1,0 +1,34 @@
+# [AI-GEN] agent=Claude date=2026-08-08 task=Add .gitignore (repo had none; caches were being committed)
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local artifact store — run outputs are regenerable from configs + seeds and are
+# large; only frozen/ (the pre-registration store) and configs/ are tracked.
+# Remove this line if the PI decides run dirs should be version-controlled.
+runs/
+
+
+# Model weights are NEVER committed (Gemma/Llama licenses forbid redistribution;
+# AI_RULES.md §5, PRD.md §6 artifact checklist).
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+
+# OS
+Thumbs.db
+.DS_Store
+# Added by code-review-graph
+.code-review-graph/

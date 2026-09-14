@@ -1,0 +1,7 @@
+{
+  "_comment": "Null-freeze manifest (ARCHITECTURE.md §2; AI_RULES.md 1.4). NOT YET FROZEN: no Stage B cell has been frozen, so `cells` is empty and `frozen` is false. Stage C refuses every cell while this is the case (src/common/stage_guard.py). The freeze is the pre-registration event: it is written ONCE, in scientific_run mode, with explicit PI approval, after which this file and everything under frozen/ is append-only and never edited.",
+  "frozen": false,
+  "freeze_commit": null,
+  "frozen_at": null,
+  "cells": {}
+}
