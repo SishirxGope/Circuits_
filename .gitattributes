@@ -1,0 +1,17 @@
+# Line endings. Shell scripts MUST keep LF: a .sh file checked out with CRLF fails on
+# Linux with "bad interpreter: /usr/bin/env bash^M", which is exactly how the DGX Spark
+# scripts would break after travelling from a Windows machine.
+*.sh    text eol=lf
+*.py    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+
+# PowerShell stays CRLF - it is only ever run on Windows.
+*.ps1   text eol=crlf
+
+# Never normalise these.
+*.safetensors binary
+*.bin         binary
+*.pt          binary
+*.ckpt        binary
+*.parquet     binary
