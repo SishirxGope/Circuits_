@@ -74,6 +74,21 @@ def architecture_mismatches(tl_cfg: Any, hf_config: Any, model_cfg: Mapping[str,
     problems = []
     for key in hf:
         yaml_value = model_cfg.get(key)
+        if key == "context_length":
+            # n_ctx is NOT an architecture identity property for any model we use. VERIFIED
+            # 2026-09-22 via convert_hf_model_config: Llama-3.2-1B, Gemma-2-2b and Pythia all
+            # report positional_embedding_type='rotary', so n_ctx allocates no weight tensor and
+            # cannot reveal TransformerLens wrapping pinned weights in a divergent config, which
+            # is the only failure this function exists to catch. TransformerLens deliberately
+            # caps n_ctx (2048 for Llama-3.2 against the checkpoint's 131072); that is a runtime
+            # window, not a different model. Only an n_ctx LARGER than the checkpoint's would be
+            # incoherent. The task-side requirement (n_ctx >= the task's max_seq_len) is checked
+            # where the task is known, not here.
+            if tl[key] > hf[key]:
+                problems.append(f"{key}: TransformerLens {tl[key]} EXCEEDS pinned HF config {hf[key]}")
+            if yaml_value is not None and int(yaml_value) != hf[key]:
+                problems.append(f"{key}: configs/model yaml {yaml_value} != pinned HF config {hf[key]}")
+            continue
         if tl[key] != hf[key]:
             problems.append(f"{key}: TransformerLens {tl[key]} != pinned HF config {hf[key]}")
         if yaml_value is not None and int(yaml_value) != hf[key]:
@@ -142,6 +157,21 @@ def load_pinned_model(resolved: Mapping[str, Any], device: str | None = None):
     model.set_use_attn_result(True)
     model.set_use_split_qkv_input(True)
     model.set_use_hook_mlp_in(True)
+    # Grouped-query attention (Gemma-2-2b 8/4, Llama-3.2-1B 32/8). Without this,
+    # hook_k_input/hook_v_input are [batch, pos, n_key_value_heads, d_model] while
+    # hook_q_input is [batch, pos, n_heads, d_model], so K/V edges cannot carry the
+    # pre-registered L{l}.H{h}.{K,V} ids (CLAUDE.md §5) and the score grid would not
+    # reshape. Ungrouping makes TransformerLens use the W_K/W_V properties, which are
+    # torch.repeat_interleave of the stored _W_K/_W_V - identical arithmetic to the
+    # grouped path, which instead repeat_interleaves the activations. Scores are
+    # unchanged; the cost is memory, as K/V inputs widen to n_heads.
+    #
+    # STAGE B WARNING: the real nn.Parameters stay _W_K/_W_V (compact, n_key_value_heads).
+    # Any per-tensor Frobenius norm must come from named_parameters(); reading the W_K/W_V
+    # properties would inflate a GQA model's K/V norms by n_heads/n_key_value_heads and
+    # silently mis-scale the matched-magnitude null.
+    if getattr(model.cfg, "n_key_value_heads", None) not in (None, model.cfg.n_heads):
+        model.set_ungroup_grouped_query_attention(True)
     model.eval()
     return model
 

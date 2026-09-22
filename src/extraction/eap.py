@@ -140,10 +140,15 @@ def _check_model(model: Any) -> None:
     if getattr(cfg, "attn_only", False):
         raise NotImplementedError("attention-only models are not supported by this EAP implementation")
     kv = getattr(cfg, "n_key_value_heads", None)
-    if kv is not None and int(kv) != int(cfg.n_heads):
+    ungrouped = bool(getattr(cfg, "ungroup_grouped_query_attention", False))
+    if kv is not None and int(kv) != int(cfg.n_heads) and not ungrouped:
         raise NotImplementedError(
-            "grouped-query attention: key/value inputs have n_key_value_heads < n_heads, so K/V "
-            "input node ids need a mapping that has not been specified. Not guessed here."
+            "grouped-query attention with GROUPED k/v hooks: hook_k_input and hook_v_input are "
+            f"[batch, pos, {int(kv)}, d_model] while this module emits {int(cfg.n_heads)} per-head "
+            "K/V node ids, so the score grid would not reshape. Load the model with "
+            "ungroup_grouped_query_attention=True (real_model.load_pinned_model does this "
+            "automatically): TransformerLens then applies the repeat_interleave'd W_K/W_V "
+            "properties, which is mathematically identical to the grouped path."
         )
 
 
