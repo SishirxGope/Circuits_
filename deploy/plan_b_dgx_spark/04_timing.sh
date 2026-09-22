@@ -8,7 +8,7 @@ LOG="$(log_dir timing)"
 for model in pythia160m pythia410m gemma2_2b llama32_1b; do
   echo ""
   echo "=== $model ==="
-  "$PY" -m experiments.time_attribution --model "$model" --tasks ioi greater_than --seed 0 \
+  "$PY" -m experiments.time_attribution --model "$model" --tasks ioi greater_than --seeds 2 \
     2>&1 | tee "$LOG/$model.txt" || echo "  FAILED (licence not accepted? model too large? see log)"
 done
 

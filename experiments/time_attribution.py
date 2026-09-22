@@ -72,6 +72,16 @@ def _git_commit() -> str | None:
 
 
 def run(model_name: str, tasks: list[str], n_seeds: int, max_batch_size: int, out_dir: Path) -> Path:
+    # n_seeds is a COUNT (seeds 0..n_seeds-1), not a seed value. A zero here used to fall
+    # through to statistics.fmean() on an empty list, which fails as "fmean requires at
+    # least one data point" long after the model has loaded - see the --seed/--seeds note
+    # in main(). Refuse early and say what was actually wrong.
+    if n_seeds < 1:
+        raise SystemExit(
+            f"--seeds is the NUMBER of seeds to time (0..n-1), got {n_seeds}. "
+            "Pass --seeds 1 to time seed 0 only; --seeds 2 is the default."
+        )
+
     import importlib
 
     import torch
@@ -167,7 +177,14 @@ def run(model_name: str, tasks: list[str], n_seeds: int, max_batch_size: int, ou
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    # allow_abbrev=False: argparse's prefix matching otherwise accepts `--seed 0` as
+    # `--seeds=0`, which silently timed zero seeds. Every deploy script and doc carried
+    # that typo. Now it is a loud "unrecognized argument" instead.
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
     parser.add_argument("--model", default="pythia160m")
     parser.add_argument("--tasks", nargs="+", default=["ioi", "greater_than"])
     parser.add_argument("--seeds", type=int, default=2, help="number of seeds to time (0..n-1)")

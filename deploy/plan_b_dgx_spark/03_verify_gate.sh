@@ -15,7 +15,7 @@ echo ""
 echo "=== 3. reproduce the Pythia timing pilot ==="
 echo "  Attribution SCORES must match the PC to floating-point tolerance."
 echo "  TIMINGS will differ - that is expected and is what step 04 measures."
-"$PY" -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seed 0 \
+"$PY" -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seeds 2 \
   | tee "$(log_dir verify)/pythia160m_repro.txt"
 
 echo ""
