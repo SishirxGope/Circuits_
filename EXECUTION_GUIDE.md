@@ -192,7 +192,7 @@ float32 is pre-registered for Pythia and a mid-grid change makes cells incompara
 ```powershell
 .venv\Scripts\python.exe deploy\shared\fetch_assets.py --plan b --datasets
 
-.venv\Scripts\python.exe -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seed 0 | Tee-Object docs\baseline_pc.txt
+.venv\Scripts\python.exe -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seeds 2 | Tee-Object docs\baseline_pc.txt
 .venv\Scripts\python.exe -m pytest -q | Tee-Object docs\baseline_tests.txt
 
 .\deploy\shared\make_transfer_bundle.ps1

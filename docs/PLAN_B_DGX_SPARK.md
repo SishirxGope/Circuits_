@@ -127,7 +127,7 @@ seed 7) for calibration and **WikiText-2 test** for perplexity.
 On the PC, capture a known-good result to reproduce on the Spark:
 
 ```powershell
-.venv\Scripts\python.exe -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seed 0 | Tee-Object docs\baseline_pc.txt
+.venv\Scripts\python.exe -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seeds 2 | Tee-Object docs\baseline_pc.txt
 .venv\Scripts\python.exe -m pytest -q | Tee-Object docs\baseline_tests.txt
 ```
 
@@ -287,7 +287,7 @@ from src.extraction.real_model import load_pinned_model
 print('loader import ok')"
 
 # 3. Reproduce a Pythia run from the PC and compare numbers
-python -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seed 0
+python -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seeds 2
 
 # 4. Frozen manifest still verifies after the transfer
 python -c "
@@ -309,10 +309,10 @@ Every compute figure in this project was measured on an RTX 4060. **None of them
 The Spark's per-pass speed is genuinely unknown and may be slower.
 
 ```bash
-python -m experiments.time_attribution --model pythia160m  --tasks ioi greater_than --seed 0
-python -m experiments.time_attribution --model pythia410m  --tasks ioi greater_than --seed 0
-python -m experiments.time_attribution --model gemma2_2b   --tasks ioi greater_than --seed 0
-python -m experiments.time_attribution --model llama32_1b  --tasks ioi greater_than --seed 0
+python -m experiments.time_attribution --model pythia160m  --tasks ioi greater_than --seeds 2
+python -m experiments.time_attribution --model pythia410m  --tasks ioi greater_than --seeds 2
+python -m experiments.time_attribution --model gemma2_2b   --tasks ioi greater_than --seeds 2
+python -m experiments.time_attribution --model llama32_1b  --tasks ioi greater_than --seeds 2
 ```
 
 Record: seconds per attribution pass, and peak memory per pass, per model and task. This

@@ -20,7 +20,7 @@ All scripts are bash, run from the **repo root**.
 2. **Cache the weights and corpora:** `.venv\Scripts\python.exe deploy\shared\fetch_assets.py --plan b --datasets`
 3. **Record the baselines** you will verify against:
    ```powershell
-   .venv\Scripts\python.exe -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seed 0 | Tee-Object docs\baseline_pc.txt
+   .venv\Scripts\python.exe -m experiments.time_attribution --model pythia160m --tasks ioi greater_than --seeds 2 | Tee-Object docs\baseline_pc.txt
    .venv\Scripts\python.exe -m pytest -q | Tee-Object docs\baseline_tests.txt
    ```
 4. **Pack the bundle:** `.\deploy\shared\make_transfer_bundle.ps1`
