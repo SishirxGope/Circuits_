@@ -122,8 +122,21 @@ def build_run_name(
     configset: str,
     seed: int,
 ) -> str:
-    """Build and validate a run name (CLAUDE.md §4)."""
-    name = _SEPARATOR.join([date, stage, model, task, setting, configset, f"seed{seed}"])
+    """Build and validate a run name (CLAUDE.md §4).
+
+    ``model``, ``task`` and ``setting`` are sanitized here rather than at each call
+    site. They come straight from config, where underscores are normal and legal
+    (``name: greater_than``, cell ``rtn_int8``), but underscore is this format's field
+    separator, so an unsanitized value silently adds a field and the name fails
+    validation with a confusing "got 8" - which is exactly how every greater_than run
+    died. Sanitizing centrally means no stage runner can forget: before this, NONE of
+    the four sanitized model or task, and only stages C and D sanitized setting.
+    """
+    name = _SEPARATOR.join([
+        date, stage,
+        sanitize_token(model), sanitize_token(task), sanitize_token(setting),
+        configset, f"seed{seed}",
+    ])
     validate_run_name(name)
     return name
 
@@ -152,8 +165,11 @@ def resolve_run_name(
         return derived
 
     parsed = validate_run_name(supplied)
-    expected = {"stage": stage, "model": model, "task": task,
-                "setting": setting, "configset": configset, "seed": int(seed)}
+    # Compare against the SANITIZED values, matching what build_run_name emits;
+    # otherwise a correct supplied name would be rejected for not equalling the raw
+    # config value it was legitimately derived from.
+    expected = {"stage": stage, "model": sanitize_token(model), "task": sanitize_token(task),
+                "setting": sanitize_token(setting), "configset": configset, "seed": int(seed)}
     mismatches = {
         key: (parsed[key], want)
         for key, want in expected.items()

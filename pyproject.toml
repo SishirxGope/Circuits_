@@ -14,7 +14,20 @@ dependencies = [
   "pyarrow>=14",            # edges.parquet / freq.parquet / dnull.parquet (ARCHITECTURE.md §2)
   "hydra-core>=1.3",        # config composition (ARCHITECTURE.md §3) — REQUIRED for the entrypoints
   "omegaconf>=2.3",
+  "pyyaml>=6",              # configs/*.yaml are read directly by the deploy scripts
+  "datasets>=4",            # deploy/shared/fetch_assets.py; was imported but undeclared
 ]
+
+# Package discovery. WITHOUT this, setuptools' auto-discovery finds no importable
+# package in this layout, so `pip install -e .` reports success while installing
+# nothing importable: `python experiments/run_stage_a.py` then dies with
+# "ModuleNotFoundError: No module named 'src'", because running a script by path puts
+# experiments/ on sys.path rather than the repo root. Every deploy/ script invokes its
+# runner by path (11 call sites across both plans), so all of them depended on this.
+# `python -m experiments.run_stage_a` happened to work only because -m adds the cwd.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "experiments*", "analysis*"]
 
 [project.optional-dependencies]
 # Real-model work. Installed only after the PI approves RUN MODEL DOWNLOAD.

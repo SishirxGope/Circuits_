@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -45,14 +46,29 @@ def find_stage_b_runs(run_root: Path) -> list[Path]:
     return sorted(p for p in run_root.iterdir() if p.is_dir() and "_stageB_" in p.name)
 
 
+def _norm(value: str) -> str:
+    """Strip every separator so run names and config values compare on content alone.
+
+    Run names are built by run_naming.sanitize_token, which turns illegal characters
+    into "-": task "greater_than" becomes "greater-than", cell "rtn_int8" becomes
+    "rtn-int8". This matcher previously stripped "_" only, so it looked for
+    "greaterthan" and "rtn_int8" and matched NEITHER - every greater_than and every
+    compression cell would have been reported MISSING, and a partial freeze config
+    refused, with nothing pointing at the cause. Normalising both sides to
+    alphanumerics makes the comparison independent of which separator was used.
+    """
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
 def match_run(runs: list[Path], model_cfg: str, task: str, cell: str) -> list[Path]:
     """Every Stage B run dir whose name carries this model, task and cell."""
-    model_tok = MODEL_NAME.get(model_cfg, model_cfg)
-    task_tok = task.replace("_", "")
+    model_tok = _norm(MODEL_NAME.get(model_cfg, model_cfg))
+    task_tok = _norm(task)
+    cell_tok = _norm(cell)
     out = []
     for r in runs:
-        n = r.name.lower()
-        if model_tok.lower() in n and (task_tok in n.replace("_", "")) and cell.lower() in n:
+        n = _norm(r.name)
+        if model_tok in n and task_tok in n and cell_tok in n:
             out.append(r)
     return out
 
