@@ -34,10 +34,16 @@ try:
 except ImportError:  # pragma: no cover
     hydra_main = None  # type: ignore[assignment]
 
-from experiments.run_stage_a import PIPELINE_REGISTRY, _build_threshold_configs, _git_commit, _resolve
+from experiments.run_stage_a import (
+    PIPELINE_REGISTRY,
+    _build_threshold_configs,
+    _git_commit,
+    _load_model,
+    _resolve,
+)
+from src.compression.torch_weights import apply_weight_delta, null_draw_inputs
 from src.compression.registry import compression_provenance, compressor_for
 from src.science.circus_wrapper import CircusEnsembleRunner
-from src.extraction.mock_extractor import MockExtractor
 from src.common.config_guard import (
     MODE_ENGINEERING,
     assert_engineering_dry_run_limits,
@@ -57,29 +63,40 @@ from src.common.seeding import derive_child_seed
 DNULL_COLUMNS = ("r", "distance_l1", "distance_jensen_shannon")
 
 
+def _build_extractor(resolved: Mapping[str, Any]) -> Any:
+    """The extractor the config names, built exactly as Stage A builds it.
+
+    Stage B previously hardcoded ``MockExtractor()`` in both places it needed one, so a
+    real Stage B run would have drawn its null through the mock extractor while Stage A
+    measured the dense reference through the real one - two different measurements being
+    differenced.
+    """
+    pipeline = str(resolved.get("pipeline", "mock"))
+    if pipeline not in PIPELINE_REGISTRY:
+        raise ValueError(f"unknown pipeline {pipeline!r}; expected one of {sorted(PIPELINE_REGISTRY)}")
+    return PIPELINE_REGISTRY[pipeline](**(resolved.get("extractor_kwargs", {}) or {}))
+
+
 def _load_model_guard(resolved: Mapping[str, Any]) -> Any:
-    """Model loader shared with Stage A semantics (engineering: MockModel only)."""
-    model_cfg = dict(resolved.get("model", {}))
-    if mode_of(resolved) == MODE_ENGINEERING and model_cfg.get("synthetic"):
-        from src.synthetic.mock_model import MockModel
+    """Load the model for the null, with exactly Stage A's semantics.
 
-        return MockModel(
-            seed=int(resolved.get("seed", 0) or 0),
-            n_layers=int(model_cfg.get("n_layers", 4)),
-            n_heads=int(model_cfg.get("n_heads", 2)),
-            d_model=int(model_cfg.get("d_model", 8)),
-        )
-    raise NotImplementedError(
-        "Stage B real nulls are not available yet: they need pinned HF revisions, "
-        "upstream packages and an explicit RUN MODEL DOWNLOAD approval. "
-        "Engineering dry-runs use a MockModel (mode=engineering_dry_run)."
-    )
+    Delegates to ``run_stage_a._load_model`` rather than reimplementing the rules, so the
+    null is drawn against the same model Stage A extracted the dense reference from. The
+    pinned HF revision, the ``RUN MODEL DOWNLOAD`` gate and the architecture checks are
+    all enforced inside ``load_pinned_model``; Stage B adds no approval surface of its own.
+    """
+    return _load_model(resolved)
 
 
-def _synthetic_dnull_rows(
+def _dnull_rows(
     resolved: Mapping[str, Any], model: Any, f_pre: Any, compressor: Any
 ) -> tuple[list[dict[str, Any]], dict[str, float]]:
-    """Engineering-only D_null computation (matched-magnitude draws on MockModel).
+    """D_null for one cell: R matched-magnitude draws, re-extracted and measured.
+
+    Works on a MockModel and on a real torch model alike - the difference is confined to
+    ``src.compression.torch_weights``, which supplies shapes and delta application for a
+    real model so that ``generate_null_deltas`` (the pre-registered null in the Novelty
+    Protection Zone) is used UNCHANGED.
 
     Magnitudes come from the compressor this cell names (``compression_family`` +
     ``stage_c.compressor_kwargs``), so the null is matched to the compression it will be
@@ -87,12 +104,7 @@ def _synthetic_dnull_rows(
     the ensemble, then measures L1 and Jensen-Shannon distances vs the dense reference.
     Deterministic given (config, seed): every draw is seeded (AI_RULES.md 1.1).
     """
-    from src.synthetic.mock_model import MockModel
-
-    if not isinstance(model, MockModel):
-        raise NotImplementedError("_synthetic_dnull_rows supports MockModel only")
-
-    B, S = int(resolved["ensemble"]["B"]), int(resolved["ensemble"]["S"])
+    S = int(resolved["ensemble"]["S"])
     R = int(resolved["nulls"]["R"])
     seed = int(resolved.get("seed", 0))
     configs = _build_threshold_configs(resolved)
@@ -104,25 +116,26 @@ def _synthetic_dnull_rows(
     # that is not even in the grid, so CSI would have divided all 88 cells by the same
     # denominator while the run tags claimed otherwise (ARCHITECTURE.md §4).
     magnitudes = compressor.weight_delta(model, resolved)
-    shapes = model.tensor_shapes()
 
-    if not any(v > 0.0 for v in magnitudes.values()):
+    try:
+        # Restricted to the tensors the compression actually moved, which is also what the
+        # MockModel path has always done (its tensor_shapes() holds projections only).
+        draw_magnitudes, shapes = null_draw_inputs(model, magnitudes)
+    except ValueError as exc:
         raise RuntimeError(
-            f"compression cell {compression_provenance(resolved)} produced an all-zero "
-            "weight delta on this model, so every null draw would be a zero perturbation "
-            "and D_null would collapse to a spike at 0. Refusing to write a degenerate "
-            "denominator for CSI."
-        )
+            f"compression cell {compression_provenance(resolved)} cannot seed a null on "
+            f"this model: {exc}"
+        ) from exc
 
-    runner = CircusEnsembleRunner(MockExtractor())
+    runner = CircusEnsembleRunner(_build_extractor(resolved))
     f_pre_dict = f_pre.frequencies if hasattr(f_pre, "frequencies") else dict(f_pre)
 
     rows: list[dict[str, Any]] = []
     for r in range(R):
         deltas = generate_null_deltas(
-            magnitudes, shapes, 1, seed=derive_child_seed(seed, "null-draw", r)
+            draw_magnitudes, shapes, 1, seed=derive_child_seed(seed, "null-draw", r)
         )[0]
-        perturbed = model.apply_weight_delta(deltas)
+        perturbed = apply_weight_delta(model, deltas)
         result = runner.run(model=perturbed, task=resolved["task"], configs=configs, seeds=seeds)
         f_post = result.freq.frequencies
         rows.append(
@@ -202,11 +215,11 @@ def run_stage_b(cfg: Any) -> Path:
     # --- dense reference frequency vector (same ensemble machinery as Stage A) ----
     configs = _build_threshold_configs(resolved)
     seeds = [seed + i for i in range(S)]
-    runner = CircusEnsembleRunner(MockExtractor())
+    runner = CircusEnsembleRunner(_build_extractor(resolved))
     dense_result = runner.run(model=model, task=task_cfg, configs=configs, seeds=seeds)
 
     # --- null draws (engineering path) ---------------------------------------------
-    rows, magnitudes = _synthetic_dnull_rows(resolved, model, dense_result.freq, compressor)
+    rows, magnitudes = _dnull_rows(resolved, model, dense_result.freq, compressor)
 
     _require_pyarrow()
     import pyarrow as pa
