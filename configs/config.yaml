@@ -59,7 +59,13 @@ stage_c:
   # For dense-node the possible pairs are src/extraction/eap.py::candidate_edges; pipeline A
   # needs its own structural rule before it runs.
   chance_floor_universe: structural_edges_among_observed_nodes
-  chance_floor_universe_implemented: false   # run_stage_c still computes U*(U-1)
+  # IMPLEMENTED 2026-09-27: run_stage_c._chance_floor_universes computes the structural
+  # universe from eap.candidate_edges, intersected with the observed nodes, and one N PER
+  # LEVEL. The exact-edge N fell ~10x; the routing-head N fell ~2400x, because
+  # project_to_routing_heads maps onto heads (144 for pythia-160m) and not onto edges.
+  # Flipping this flag changes the config hash for every stage, so the four Pythia Stage A
+  # runs from 2026-09-26 predate it and are being re-run (PI decision 2026-09-27).
+  chance_floor_universe_implemented: true
 
 stage: stageA            # Algorithm 1 stage: stageA (dense reference) for this entrypoint
 seed: 0                  # base seed; the S ensemble seeds are seed, seed+1, ..., seed+S-1

@@ -249,6 +249,156 @@ def prune_wanda(
     return out
 
 
+
+# -----------------------------------------------------------------------------------
+# Real-model (torch) path - B2, 2026-09-27
+# -----------------------------------------------------------------------------------
+
+# The TransformerLens equivalents of upstream's two special cases. Upstream excludes
+# lm_head from pruning entirely, and puts the token embedding in the THRESHOLD POOL
+# without ever zeroing it, because embed is tied to the excluded lm_head
+# (saediag.pruning.prune_magnitude_global_inplace, verified 2026-08-08).
+#
+# These names decide the pool, and the pool decides what a "30% cell" means. PRD.md 2
+# requires our grid to match ref [1]'s; if the pools disagree, the C5 cross-audit
+# correlates circuit damage from one intervention against feature damage from another.
+TL_EXCLUDE: tuple[str, ...] = ("unembed.W_U",)
+TL_EMBEDDING: tuple[str, ...] = ("embed.W_E",)
+
+
+def prune_magnitude_torch(
+    model: Any,
+    target_sparsity: float,
+    global_scope: bool = True,
+    exclude: Sequence[str] = TL_EXCLUDE,
+    embedding_names: Sequence[str] = TL_EMBEDDING,
+    include_embedding_in_threshold: bool = True,
+) -> Any:
+    """Magnitude-prune a torch model; returns a pruned COPY and never mutates ``model``.
+
+    Mirrors ``prune_magnitude`` above, including the two details that make the labelled
+    sparsity differ from the achieved one:
+
+    * the token embedding joins the threshold pool but is never zeroed;
+    * the keep rule is a strict ``|w| > threshold``, so magnitudes tied at the threshold
+      all fall on the drop side.
+
+    Side-effect-free with respect to ``model`` (ARCHITECTURE.md 2): Stage B re-reads the
+    dense model for every null draw.
+
+    LABELLED SPARSITY IS NOT ACHIEVED SPARSITY. Under global scope a "30% cell" does not
+    remove 30% of every matrix. ``weight_delta`` measures what was actually removed, which
+    is what the null must match, but the paper must not describe the cell label as a
+    per-matrix rate. Call ``achieved_sparsity_torch`` and record the result in the run log.
+    """
+    import copy
+
+    import torch
+
+    if not (0.0 <= target_sparsity <= 1.0):
+        raise ValueError(f"target_sparsity must be in [0, 1], got {target_sparsity}")
+
+    from .torch_weights import projection_parameters
+
+    out = copy.deepcopy(model)
+    params = dict(out.named_parameters())
+    exclude_set, embed_set = set(exclude), set(embedding_names)
+
+    missing_embed = sorted(embed_set - set(params))
+    if missing_embed:
+        raise ValueError(
+            f"embedding_names not present in the model: {missing_embed}; the threshold "
+            "pool would silently differ from the upstream one, and a cell labelled 30% "
+            "would not be ref [1]'s 30% cell (PRD.md 2, claim C5)"
+        )
+
+    prunable = [
+        name
+        for name in projection_parameters(out)
+        if name not in exclude_set and name not in embed_set
+    ]
+    if not prunable:
+        raise ValueError("no prunable projection matrices found in this model")
+
+    with torch.no_grad():
+        if target_sparsity <= 0.0:
+            return out
+        if target_sparsity >= 1.0:
+            for name in prunable:
+                params[name].zero_()
+            return out
+
+        if not global_scope:
+            # Per-tensor scope: each tensor keeps (1 - sparsity) of its OWN weights.
+            for name in prunable:
+                w = params[name].detach()
+                flat = w.to(torch.float32).abs().reshape(-1)
+                n_drop = int(flat.numel() * target_sparsity)
+                if n_drop <= 0:
+                    continue
+                thr = torch.kthvalue(flat, n_drop).values
+                params[name].copy_(torch.where(w.abs() > thr, w, torch.zeros_like(w)))
+            return out
+
+        # Global scope: ONE threshold over the pooled magnitudes, computed from the
+        # ORIGINAL weights and only then applied. Computing it while writing would let a
+        # pruned tensor feed back into the threshold and under-prune (numpy bug, 2026-08-08).
+        pool_names = list(prunable)
+        if include_embedding_in_threshold:
+            pool_names += sorted(embed_set & set(params))
+        pool = torch.cat(
+            [params[name].detach().to(torch.float32).abs().reshape(-1) for name in pool_names]
+        )
+        n_drop = int(target_sparsity * pool.numel())
+        if n_drop <= 0:
+            return out
+        threshold = torch.kthvalue(pool, n_drop).values
+
+        for name in prunable:
+            w = params[name].detach()
+            params[name].copy_(torch.where(w.abs() > threshold, w, torch.zeros_like(w)))
+
+        kept = sum(int((params[name] != 0).sum().item()) for name in prunable)
+        if kept == 0:
+            n_tied = int((pool == threshold).sum().item())
+            raise ValueError(
+                f"global magnitude pruning at target_sparsity={target_sparsity} zeroed "
+                f"EVERY prunable weight: {n_tied} of {pool.numel()} pooled magnitudes tie "
+                f"at the threshold {float(threshold)!r}, and a strict |w| > threshold rule "
+                "drops all of them. This reproduces the upstream rule, but the result is a "
+                "dead model whose CSI is meaningless. Use global_scope=False for exact "
+                "per-tensor counts, or check for a degenerate weight distribution."
+            )
+    return out
+
+
+def achieved_sparsity_torch(
+    pruned: Any,
+    exclude: Sequence[str] = TL_EXCLUDE,
+    embedding_names: Sequence[str] = TL_EMBEDDING,
+) -> dict[str, float]:
+    """Fraction of weights actually zeroed, per tensor plus ``__overall__``.
+
+    Measured over prunable projection matrices only. Counting the embedding in the
+    denominator would dilute the reported rate by however large it is, which for a real
+    model is enough to make a 50% prune report as a few percent (upstream measures over
+    Linear weights only).
+    """
+    from .torch_weights import projection_parameters
+
+    skip = set(exclude) | set(embedding_names)
+    params = dict(pruned.named_parameters())
+    names = [n for n in projection_parameters(pruned) if n not in skip]
+    out = {
+        n: float((params[n] == 0).sum().item()) / float(params[n].numel())
+        for n in sorted(names)
+    }
+    total = sum(params[n].numel() for n in names)
+    zeros = sum(int((params[n] == 0).sum().item()) for n in names)
+    out["__overall__"] = (zeros / total) if total else 0.0
+    return out
+
+
 class MagnitudePruner:
     """Magnitude pruner (Compressor protocol) — engineering draft.
 
@@ -273,18 +423,50 @@ class MagnitudePruner:
                 d_model=model.d_model,
                 weights=pruned_weights,
             )
+        from .torch_weights import is_torch_model
+
+        if is_torch_model(model):
+            return prune_magnitude_torch(
+                model, self.sparsity, global_scope=self.global_scope, exclude=self.exclude
+            )
         raise NotImplementedError(
-            "real-model magnitude pruning wraps saediag.pruning (sae-pruning-paper @ "
-            "261191804675…) and requires Stage C approval + RUN MODEL DOWNLOAD"
+            "magnitude pruning supports MockModel and torch modules exposing "
+            f"named_parameters(); got {type(model).__name__}."
         )
 
     def weight_delta(self, model: Model, cfg: Any) -> PerTensorFrobenius:
         if isinstance(model, MockModel):
             return model.weight_delta_frobenius(self.apply(model, cfg))
+
+        import torch
+
+        from .torch_weights import is_torch_model
+
+        if is_torch_model(model):
+            # MEASURED, never predicted: under global scope the achieved sparsity differs
+            # from the labelled one per tensor, so any analytic estimate of the delta would
+            # mis-scale the matched-magnitude null (ARCHITECTURE.md 4).
+            pruned = dict(self.apply(model, cfg).named_parameters())
+            out: PerTensorFrobenius = {}
+            with torch.no_grad():
+                for name, param in model.named_parameters():
+                    delta = pruned[name].detach().to(torch.float32) - param.detach().to(
+                        torch.float32
+                    )
+                    out[name] = float(torch.linalg.vector_norm(delta).item())
+            return out
         raise NotImplementedError(
-            "real-model magnitude weight_delta requires Stage C approval; "
-            "use the engineering path (MockModel) for dry-runs"
+            "magnitude weight_delta supports MockModel and torch modules exposing "
+            f"named_parameters(); got {type(model).__name__}."
         )
 
 
-__all__ = ["MagnitudePruner", "prune_magnitude", "prune_wanda"]
+__all__ = [
+    "MagnitudePruner",
+    "TL_EMBEDDING",
+    "TL_EXCLUDE",
+    "achieved_sparsity_torch",
+    "prune_magnitude",
+    "prune_magnitude_torch",
+    "prune_wanda",
+]

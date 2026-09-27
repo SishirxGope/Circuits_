@@ -51,16 +51,48 @@ def test_the_compressor_probe_is_handed_a_real_torch_module(preflight):
     )
 
 
-def test_rtn_reads_as_implemented_and_the_other_families_do_not(preflight):
-    """B2 status per family. RTN's real path landed 2026-09-27; the other four are stubs."""
+def test_b2_status_matches_which_families_are_actually_implemented(preflight):
+    """RTN and magnitude landed 2026-09-27. Wanda, GPTQ and AWQ all need the Q7
+    calibration cache, so they must keep gating the queue."""
     pytest.importorskip("torch")
     status = {
         label.replace("B2 compressor: ", ""): ok
         for label, ok, _ in preflight.check_compressors()
     }
-    assert status["rtn"] is True, "RTN has a real-model path; a BLOCKED here keeps the gate shut"
-    for family in ("gptq", "awq", "magnitude", "wanda"):
-        assert status[family] is False, f"{family} is still a stub and must gate the queue"
+    for family in ("rtn", "magnitude"):
+        assert status[family] is True, f"{family} is implemented; a BLOCKED keeps the gate shut"
+    for family in ("gptq", "awq", "wanda"):
+        assert status[family] is False, f"{family} still needs calibration data (Q7)"
+
+
+def test_an_implemented_family_reads_ok_by_succeeding_not_by_erroring(preflight):
+    """Guards the false-OK class of bug directly.
+
+    ``_probe`` scores any non-NotImplementedError as "real path entered", so a compressor
+    that blew up on the probe's inputs would read as implemented. Magnitude pruning did
+    exactly that when the probe carried no ``embed.W_E``: it raised ValueError and scored
+    OK while pruning nothing.
+    """
+    pytest.importorskip("torch")
+    details = {
+        label.replace("B2 compressor: ", ""): detail
+        for label, ok, detail in preflight.check_compressors()
+        if ok
+    }
+    for family, detail in details.items():
+        assert detail == "returned without error", (
+            f"{family} reads OK via {detail!r} rather than by completing; the probe inputs "
+            "are wrong for it and the OK is not evidence the path works"
+        )
+
+
+def test_the_probe_model_carries_the_names_the_pruners_special_case(preflight):
+    """embed.W_E joins the threshold pool and unembed.W_U is excluded, so a probe missing
+    them cannot exercise the pruning rule at all."""
+    pytest.importorskip("torch")
+    names = {n for n, _ in preflight._probe_model().named_parameters()}
+    assert "embed.W_E" in names
+    assert "unembed.W_U" in names
 
 
 def test_a_family_needs_both_apply_and_weight_delta(preflight):
@@ -85,13 +117,32 @@ def test_a_family_needs_both_apply_and_weight_delta(preflight):
     assert "NotImplementedError" in detail
 
 
-def test_the_null_perturber_is_still_blocked(preflight):
-    """B1 guards the denominator of every CSI; it must not read OK until it is real."""
-    _, ok, _ = preflight.check_null_perturber()
-    assert ok is False, (
-        "B1 reads implemented, but MatchedMagnitudePerturber still supports MockModel "
-        "only; a real Stage B null needs a torch adapter first"
-    )
+def test_the_null_perturber_reads_implemented(preflight):
+    """B1 closed 2026-09-27 (PI-approved): the Perturber now handles torch modules.
+
+    The probe must hand it a real module - with a bare sentinel a correct perturber
+    raises NotImplementedError and would be misreported as a stub, exactly as RTN was.
+    """
+    pytest.importorskip("torch")
+    _, ok, detail = preflight.check_null_perturber()
+    assert ok is True, f"B1 reads blocked: {detail}"
+
+
+def test_the_b1_probe_actually_perturbs_something(preflight):
+    """Guards against a false OK: a perturber that returned the model untouched would
+    also "return without error" and read as implemented."""
+    torch = pytest.importorskip("torch")
+    from src.common.seeding import create_seed_generator
+    from src.science.matched_magnitude import MatchedMagnitudePerturber
+
+    model = preflight._probe_model()
+    magnitudes = {name: 1.0 for name, _ in model.named_parameters()}
+    rng, _ = create_seed_generator(0)
+    perturbed = MatchedMagnitudePerturber().apply(model, magnitudes, rng)
+
+    before = dict(model.named_parameters())
+    moved = [n for n, p in perturbed.named_parameters() if not torch.equal(before[n], p)]
+    assert set(moved) == set(magnitudes), "the probe model was not actually perturbed"
 
 
 def test_the_gate_is_still_shut_overall(preflight):

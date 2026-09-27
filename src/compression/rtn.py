@@ -107,12 +107,15 @@ def _is_torch_model(model: Any) -> bool:
 
 
 def quantizable_parameters(model: Any) -> list[str]:
-    """Names of the projection matrices this compressor touches, in model order."""
-    return [
-        name
-        for name, param in model.named_parameters()
-        if param.ndim >= 2 and any(suffix in name.split(".")[-1] for suffix in QUANTIZED_SUFFIXES)
-    ]
+    """Names of the projection matrices this compressor touches, in model order.
+
+    Delegates to ``torch_weights.projection_parameters`` so the quantizer and the pruners
+    select exactly the same tensors; a divergence would make ``weight_delta`` describe a
+    different set than ``apply`` modifies.
+    """
+    from .torch_weights import projection_parameters
+
+    return projection_parameters(model)
 
 
 class RtnQuantizer:

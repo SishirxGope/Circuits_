@@ -43,6 +43,7 @@ import datetime
 import json
 import statistics
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +121,101 @@ def _build_compressor(resolved: dict[str, Any]):
     frozen null was matched to.
     """
     return compressor_for(resolved, stage="stageC")
+
+
+def _structural_edge_universe(model: Any) -> list[str] | None:
+    """Every edge the extractor COULD have scored, or None if that is not derivable.
+
+    For the dense-node pipeline this is ``eap.candidate_edges``: EAP's universe is
+    layer-ordered and type-restricted (head outputs feed Q/K/V and MLP inputs, never
+    arbitrary components), so it is ~10x SMALLER than all ordered pairs of components.
+    For a MockModel it is all ordered pairs over the model's declared node universe,
+    which is exactly what MockExtractor enumerates.
+
+    Returns None for pipeline A, whose node basis is active transcoder features rather
+    than heads - there ``candidate_edges`` does not describe the universe at all.
+    """
+    cfg = getattr(model, "cfg", None)
+    if cfg is not None and hasattr(cfg, "n_heads") and hasattr(cfg, "n_layers"):
+        from src.extraction.eap import candidate_edges
+
+        return candidate_edges(cfg)
+    nodes = getattr(model, "nodes", None)
+    if callable(nodes):
+        universe = tuple(nodes())
+        return [f"{a}->{b}" for a in universe for b in universe if a != b]
+    return None
+
+
+def _chance_floor_universes(
+    model: Any, f_dense: Mapping[str, float], f_post: Mapping[str, float],
+    level2_scheme: Any,
+) -> dict[str, int]:
+    """Candidate-universe size N per comparison level (AI_RULES.md 4.4).
+
+    Two corrections over the single N this used to compute:
+
+    1. **The universe is structural, not all-pairs.** ``candidate_edge_count`` returns
+       C*(C-1), which assumes every ordered pair of components is a possible edge. EAP's
+       universe is layer-ordered and type-restricted, making C*(C-1) about 10x too large
+       (measured: 10.70x pythia-160m, 10.52x pythia-410m, 11.03x llama-3.2-1b, 9.95x
+       gemma-2-2b). Too large an N pushes the random-overlap baseline DOWN and makes every
+       overlap look above chance for combinatorial reasons.
+
+    2. **Each level has its own universe.** The same N was used for both levels, but
+       ``project_to_routing_heads`` projects onto HEADS, not onto coarse edges - so the
+       routing-head universe is the number of heads (144 for pythia-160m), not the number
+       of edges. Sharing the exact-edge N understated that floor by 2400x-8300x, driving
+       the routing-head chance floor to ~1e-5 where the honest value is ~0.025. That is
+       the level the two-level stability claim is stated at (claim C2).
+
+    The observed-node restriction from the original implementation is kept: N counts only
+    edges whose endpoints the extractor actually emitted for these prompts, so a
+    model-wide count cannot include nodes that could never have appeared.
+    """
+    observed_nodes = {
+        node for edge_id_ in set(f_dense) | set(f_post)
+        for node in edge_id_.split("->", 1)
+    }
+    structural = _structural_edge_universe(model)
+
+    if structural is None:
+        # Pipeline A: no structural description of the universe, so fall back to the
+        # all-pairs count over observed nodes and say so rather than inventing a number.
+        n_exact = candidate_edge_count(len(observed_nodes))
+        reachable = ()
+    else:
+        reachable = tuple(
+            e for e in structural
+            if all(part in observed_nodes for part in e.split("->", 1))
+        )
+        n_exact = len(reachable)
+
+    if reachable:
+        ones = {e: 1.0 for e in reachable}
+        coarse = (
+            project_to_coarse_level(ones, level2_scheme, strict=False)
+            if level2_scheme
+            else project_to_routing_heads(ones, strict=False)
+        )
+        n_coarse = len(coarse)
+    else:
+        n_coarse = 0
+
+    if n_coarse <= 0:
+        # An empty coarse universe would make the routing-head floor undefined; fall back
+        # to the coarse projection of what was actually observed, and never to n_exact -
+        # that is the 2400x error this function exists to remove.
+        observed_coarse = (
+            project_to_coarse_level({e: 1.0 for e in set(f_dense) | set(f_post)},
+                                    level2_scheme, strict=False)
+            if level2_scheme
+            else project_to_routing_heads({e: 1.0 for e in set(f_dense) | set(f_post)},
+                                          strict=False)
+        )
+        n_coarse = max(len(observed_coarse), 1)
+
+    return {"exact_edge": max(n_exact, 1), "routing_head": n_coarse}
 
 
 def _load_model(resolved: dict[str, Any]):
@@ -232,12 +328,11 @@ def run_stage_c(cfg: Any) -> Path:
     # the random-overlap baseline down, and makes every overlap look above chance for
     # purely combinatorial reasons. Same trap the Q11 aggregate decision avoided.
     # arXiv:2607.18921's candidate sets are 37 and 31 — small universes, honest floors.
-    observed_nodes = {
-        node
-        for edge_id_ in set(f_dense) | set(f_post)
-        for node in edge_id_.split("->", 1)
-    }
-    n_universe = candidate_edge_count(len(observed_nodes))
+    #
+    # ONE N PER LEVEL, and structural rather than all-pairs — see
+    # _chance_floor_universes for the two errors this replaces (~10x at the exact-edge
+    # level, 2400x-8300x at the routing-head level). Computed after the coarse scheme is
+    # resolved, since the coarse universe depends on it.
 
     # --- the coarse comparison level (Q10, pre-registered 2026-09-12) ----------------
     # The scheme comes from configs/comparison/*.yaml. Passing scheme=None would use
@@ -250,6 +345,8 @@ def run_stage_c(cfg: Any) -> Path:
     else:
         coarse_pre = project_to_routing_heads(f_dense)
         coarse_post = project_to_routing_heads(f_post)
+
+    n_universes = _chance_floor_universes(model, f_dense, f_post, level2_scheme)
 
     # --- per-cell membership, so the CI can be bootstrapped over B, S and r ----------
     # The full grid is passed explicitly: a (config, seed) cell that extracted no edges
@@ -283,8 +380,9 @@ def run_stage_c(cfg: Any) -> Path:
         ))
         # AI_RULES.md 4.4: every overlap statistic carries its random top-k floor.
         floors[level_name] = overlap_vs_chance_for_freqs(
-            pre, post_vec, n_universe=n_universe, n_draws=500, seed=seed
+            pre, post_vec, n_universe=n_universes[level_name], n_draws=500, seed=seed
         )
+        floors[level_name]["n_universe"] = n_universes[level_name]
 
     csi_path = write_csi_table(run_dir / "csi_table.csv", rows)
 

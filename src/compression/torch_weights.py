@@ -132,4 +132,34 @@ def apply_weight_delta(model: Any, deltas: Mapping[str, np.ndarray]) -> Any:
     return out
 
 
-__all__ = ["apply_weight_delta", "is_torch_model", "null_draw_inputs", "tensor_shapes"]
+# Parameter-name suffixes naming a projection matrix - the standard PTQ/pruning surface
+# (GPTQ §4, AWQ §3, Wanda §3). Substring match on the final dotted component, so "W_K"
+# also catches the GQA parameter "_W_K", which is the tensor we want.
+PROJECTION_SUFFIXES: tuple[str, ...] = (
+    "W_Q", "W_K", "W_V", "W_O", "W_in", "W_out", "W_gate",
+)
+
+
+def projection_parameters(model: Any) -> list[str]:
+    """Names of the projection matrices a compressor touches, in model order.
+
+    Shared by the quantizer and the pruners: if they disagreed about which tensors are
+    compressible, ``weight_delta`` would report magnitudes for one set while ``apply``
+    modified another, and the matched-magnitude null would be matched to neither.
+    """
+    return [
+        name
+        for name, param in model.named_parameters()
+        if param.ndim >= 2
+        and any(suffix in name.split(".")[-1] for suffix in PROJECTION_SUFFIXES)
+    ]
+
+
+__all__ = [
+    "PROJECTION_SUFFIXES",
+    "apply_weight_delta",
+    "is_torch_model",
+    "null_draw_inputs",
+    "projection_parameters",
+    "tensor_shapes",
+]

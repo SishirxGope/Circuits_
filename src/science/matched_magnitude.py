@@ -16,8 +16,17 @@ be re-tuned afterward (AI_RULES.md 1.4).
 Engineering implementation (PROVISIONAL):
 - Works on numpy tensor registries (MockModel, src/synthetic/mock_model.py) so the
   null pipeline is exercised end-to-end without real models.
-- Real-model support lands in Stage B engineering (requires RUN MODEL DOWNLOAD +
-  upstream packages); it raises an informative error until then.
+- Works on real torch models (2026-09-27, approved by PI). The perturbation itself is
+  unchanged: ``_delta_for`` draws every tensor from the caller's seeded rng exactly as
+  before. Only shape-reading and delta-application are delegated to
+  ``src/compression/torch_weights.py``, since a TransformerLens model exposes neither
+  ``tensor_shapes()`` nor ``apply_weight_delta()``. Under GQA the perturbed tensors are
+  the compact ``_W_K``/``_W_V`` parameters, matching what ``Compressor.weight_delta``
+  measures - never the expanded ``W_K``/``W_V`` properties, whose Frobenius norms are
+  inflated by ``n_heads // n_key_value_heads``.
+- A perturbation is applied in float32 and cast back to the parameter dtype, so on a
+  bfloat16 checkpoint the realized ``||dW||_F`` only approximates the requested
+  magnitude: the null is matched to the precision the model is stored in.
 """
 
 from __future__ import annotations
@@ -105,10 +114,33 @@ class MatchedMagnitudePerturber:
                     f"{sorted(model.tensor_shapes())}"
                 )
             return model.apply_weight_delta(deltas)
+        # Real torch models (2026-09-27, approved by PI). Every random draw still comes
+        # from ``_delta_for`` in THIS file and from the caller's ``rng`` (AI_RULES.md 1.1);
+        # only the plumbing - reading shapes off the model and writing the delta back to a
+        # copy - is delegated, because a real model exposes neither ``tensor_shapes`` nor
+        # ``apply_weight_delta``. No perturbation mathematics lives outside this module.
+        from ..compression.torch_weights import (
+            apply_weight_delta,
+            is_torch_model,
+            null_draw_inputs,
+        )
+
+        if is_torch_model(model):
+            # Restricted to the tensors the compression actually moved, which is what the
+            # MockModel branch above already does: its ``tensor_shapes()`` holds only the
+            # projection matrices a compressor touches.
+            drawn, shapes = null_draw_inputs(model, magnitudes)
+            deltas = {
+                name: _delta_for(name, drawn[name], shape, rng)
+                # sorted() so the rng is consumed in a fixed order and the draw is
+                # reproducible from the seed alone, matching generate_null_deltas.
+                for name, shape in sorted(shapes.items())
+            }
+            return apply_weight_delta(model, deltas)
+
         raise NotImplementedError(
-            "MatchedMagnitudePerturber currently supports MockModel (engineering dry-run "
-            "only, Q3/Q9). Real models require Stage B engineering + pinned upstream "
-            "packages and an explicit RUN MODEL DOWNLOAD approval."
+            "MatchedMagnitudePerturber supports MockModel and torch modules exposing "
+            f"named_parameters(); got {type(model).__name__}."
         )
 
 

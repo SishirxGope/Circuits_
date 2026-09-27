@@ -237,11 +237,22 @@ class TestOpenDecisionsAreStillMarked:
         assert (ensemble["B"], ensemble["S"], nulls["R"]) == (16, 5, 20)
         assert ensemble["pi_confirmed"] is True and nulls["pi_confirmed"] is True
 
-    def test_the_chance_floor_universe_decision_is_recorded(self):
-        """Decided 2026-09-14; flagged unimplemented so Stage C cannot silently use U*(U-1)."""
+    def test_the_chance_floor_universe_decision_is_recorded_and_implemented(self):
+        """Decided 2026-09-14, implemented 2026-09-27 (B3).
+
+        The flag is the gate preflight reads, so it may only be true while
+        ``run_stage_c._chance_floor_universes`` really computes the structural universe.
+        Flipping it back without reverting that function would let Stage C claim an honest
+        floor while computing U*(U-1) - the silent failure B3 was about.
+        """
         stage_c = _load(CONFIGS / "config.yaml")["stage_c"]
         assert stage_c["chance_floor_universe"] == "structural_edges_among_observed_nodes"
-        assert stage_c["chance_floor_universe_implemented"] is False
+        assert stage_c["chance_floor_universe_implemented"] is True
+
+        from experiments.run_stage_c import _chance_floor_universes, _structural_edge_universe
+
+        assert callable(_structural_edge_universe)
+        assert callable(_chance_floor_universes)
 
     def test_q10_q11_are_preregistered(self):
         cfg = _load(CONFIGS / "comparison" / "final.yaml")

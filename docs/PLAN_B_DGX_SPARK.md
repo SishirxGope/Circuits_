@@ -279,7 +279,7 @@ results from two machines are comparable.
 
 ```bash
 # 1. Test suite — must match the PC baseline
-pytest -q                      # expect: 571 passed, 1 skipped (or 572 passed once the exit gate lands)
+pytest -q                      # expect: 617 passed, 1 skipped (or 618 passed once the exit gate lands)
 
 # 2. Pinned loading works, including the architecture check
 python -c "

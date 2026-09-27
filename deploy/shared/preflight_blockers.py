@@ -48,14 +48,39 @@ def _probe_model():
     except Exception:  # noqa: BLE001 - no torch: stay conservative
         return _NotAMockModel()
 
-    class _TinyProjection(nn.Module):
+    class _TinyTransformerLens(nn.Module):
+        """Parameter names mirroring TransformerLens, including the two the pruners
+        special-case: ``embed.W_E`` joins the threshold pool, ``unembed.W_U`` is excluded.
+
+        A probe carrying only bare projections made magnitude pruning raise
+        ValueError("embedding_names not present in the model"), which ``_probe`` scores as
+        implemented because it is not a NotImplementedError - a false OK on a pruner that
+        never pruned anything.
+        """
+
         def __init__(self) -> None:
             super().__init__()
-            # Named to match the projection suffixes the compressors select on.
-            self.W_Q = nn.Parameter(torch.randn(2, 8, 4, generator=torch.Generator().manual_seed(0)))
-            self.W_out = nn.Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(1)))
+            g = torch.Generator().manual_seed(0)
 
-    return _TinyProjection()
+            self.embed = nn.Module()
+            self.embed.W_E = nn.Parameter(torch.randn(40, 8, generator=g))
+            self.unembed = nn.Module()
+            self.unembed.W_U = nn.Parameter(torch.randn(8, 40, generator=g))
+
+            attn = nn.Module()
+            attn.W_Q = nn.Parameter(torch.randn(2, 8, 4, generator=g))
+            attn.W_K = nn.Parameter(torch.randn(2, 8, 4, generator=g))
+            attn.W_V = nn.Parameter(torch.randn(2, 8, 4, generator=g))
+            attn.W_O = nn.Parameter(torch.randn(2, 4, 8, generator=g))
+            mlp = nn.Module()
+            mlp.W_in = nn.Parameter(torch.randn(8, 16, generator=g))
+            mlp.W_out = nn.Parameter(torch.randn(16, 8, generator=g))
+            block = nn.Module()
+            block.attn = attn
+            block.mlp = mlp
+            self.blocks = nn.ModuleList([block])
+
+    return _TinyTransformerLens()
 
 
 def _probe(fn, *args) -> tuple[bool, str]:
@@ -84,8 +109,23 @@ def check_null_perturber() -> tuple[str, bool, str]:
     method = getattr(p, "perturb", None) or getattr(p, "apply", None)
     if method is None:
         return "B1 matched-magnitude null", False, "no perturb/apply method found"
-    ok, detail = _probe(method, _NotAMockModel(), {"w": 1.0}, 0)
+    # A real module and magnitudes naming its own parameters, for the same reason the
+    # compressor probe uses one: handed a bare sentinel, a correctly implemented perturber
+    # raises NotImplementedError, which this file reads as "still a stub".
+    model = _probe_model()
+    magnitudes = {
+        name: 1.0 for name, _ in getattr(model, "named_parameters", list)()
+    } or {"w": 1.0}
+    rng = _probe_rng()
+    ok, detail = _probe(method, model, magnitudes, rng)
     return "B1 matched-magnitude null", ok, detail
+
+
+def _probe_rng():
+    """A seeded numpy Generator, which is what the Perturber protocol is handed."""
+    import numpy as np
+
+    return np.random.default_rng(0)
 
 
 def check_compressors() -> list[tuple[str, bool, str]]:

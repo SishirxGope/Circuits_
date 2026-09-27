@@ -296,13 +296,19 @@ class TestWeightDeltaFeedsTheNull:
         assert int4 > int8
 
 
-# RTN is deliberately absent from this list: it now has a reviewed real-model path
-# (deploy/BLOCKERS.md B2), so asserting that it refuses real models would assert the
-# opposite of the feature. Its own refusal contract is tested below, and its real-model
-# behaviour in tests/test_rtn_real_model.py. Each remaining compressor moves off this
-# list only when its real path lands.
-_UNIMPLEMENTED = [MagnitudePruner(), WandaPruner(), GptqCompressor(), AwqCompressor()]
-_UNIMPLEMENTED_IDS = ["magnitude", "wanda", "gptq", "awq"]
+# Compressors with a reviewed real-model path are deliberately absent from this list:
+# asserting that they refuse real models would assert the opposite of the feature. Their
+# refusal contracts are tested below and their real-model behaviour in dedicated modules
+# (tests/test_rtn_real_model.py, tests/test_magnitude_torch.py). A compressor moves off
+# this list only when its real path lands.
+#   rtn        - real path landed 2026-09-27 (deploy/BLOCKERS.md B2)
+#   magnitude  - real path landed 2026-09-27
+#   wanda      - still blocked: needs the Q7 calibration cache (activation second moments)
+#   gptq/awq   - still blocked: need the Q7 calibration cache
+_UNIMPLEMENTED = [WandaPruner(), GptqCompressor(), AwqCompressor()]
+_UNIMPLEMENTED_IDS = ["wanda", "gptq", "awq"]
+_IMPLEMENTED = [RtnQuantizer(), MagnitudePruner()]
+_IMPLEMENTED_IDS = ["rtn", "magnitude"]
 
 
 class TestRealModelsAreStillRefused:
@@ -321,7 +327,10 @@ class TestRealModelsAreStillRefused:
             compressor.weight_delta(object(), {})
 
     @pytest.mark.parametrize("method", ["apply", "weight_delta"])
-    def test_rtn_still_refuses_types_it_cannot_handle(self, method):
-        """RTN handles MockModel and torch modules. Anything else must raise, not guess."""
-        with pytest.raises(NotImplementedError, match="neither MockModel"):
-            getattr(RtnQuantizer(), method)(object(), {})
+    @pytest.mark.parametrize("compressor", _IMPLEMENTED, ids=_IMPLEMENTED_IDS)
+    def test_an_implemented_compressor_still_refuses_types_it_cannot_handle(
+        self, compressor, method
+    ):
+        """These handle MockModel and torch modules. Anything else must raise, not guess."""
+        with pytest.raises(NotImplementedError, match="MockModel"):
+            getattr(compressor, method)(object(), {})

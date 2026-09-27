@@ -133,10 +133,72 @@ class TestPerturberContract:
             actual = frobenius_norm(perturbed.weights[name] - model.weights[name])
             assert actual == pytest.approx(target, rel=1e-12)
 
-    def test_real_models_refuse_until_stage_b_engineering(self):
+    def test_something_that_is_neither_a_mock_nor_a_torch_module_is_refused(self):
+        """The real-model path landed 2026-09-27; junk must still raise, not be guessed at."""
         rng, _ = create_seed_generator(0)
-        with pytest.raises(NotImplementedError, match="RUN MODEL DOWNLOAD"):
+        with pytest.raises(NotImplementedError, match="got object"):
             MatchedMagnitudePerturber().apply(object(), {"w": 1.0}, rng)
+
+    def test_a_real_torch_model_gets_the_requested_magnitude(self):
+        """ARCHITECTURE.md §6's requirement, now on a real module rather than a MockModel.
+
+        This is the property the whole paper rests on: if the realized per-tensor
+        Frobenius norm does not equal the magnitude the compressor measured, CSI divides
+        by a null matched to a different compression.
+        """
+        torch = pytest.importorskip("torch")
+        pytest.importorskip("transformer_lens")
+        from transformer_lens import HookedTransformer, HookedTransformerConfig
+
+        from src.compression.rtn import RtnQuantizer
+
+        cfg = HookedTransformerConfig(
+            n_layers=2, d_model=16, n_heads=4, d_head=4, d_mlp=32, d_vocab=40, n_ctx=16,
+            act_fn="gelu", normalization_type="LN", positional_embedding_type="rotary",
+            rotary_dim=4, dtype=torch.float32, seed=0, device="cpu",
+        )
+        model = HookedTransformer(cfg)
+        model.eval()
+
+        magnitudes = RtnQuantizer(bits=4).weight_delta(model, None)
+        rng, _ = create_seed_generator(11)
+        perturbed = MatchedMagnitudePerturber().apply(model, magnitudes, rng)
+
+        before = dict(model.named_parameters())
+        after = dict(perturbed.named_parameters())
+        checked = 0
+        for name, target in magnitudes.items():
+            if target == 0.0:
+                assert torch.equal(before[name], after[name]), f"{name} moved but should not"
+                continue
+            realized = frobenius_norm((after[name] - before[name]).detach().numpy())
+            assert realized == pytest.approx(target, rel=1e-5), name
+            checked += 1
+        assert checked > 0, "no tensor was perturbed, so nothing was actually tested"
+
+    def test_a_real_torch_model_is_never_mutated(self):
+        """Stage B re-reads the dense model for every one of the R draws."""
+        torch = pytest.importorskip("torch")
+        pytest.importorskip("transformer_lens")
+        from transformer_lens import HookedTransformer, HookedTransformerConfig
+
+        from src.compression.rtn import RtnQuantizer
+
+        cfg = HookedTransformerConfig(
+            n_layers=2, d_model=16, n_heads=4, d_head=4, d_mlp=32, d_vocab=40, n_ctx=16,
+            act_fn="gelu", normalization_type="LN", positional_embedding_type="rotary",
+            rotary_dim=4, dtype=torch.float32, seed=0, device="cpu",
+        )
+        model = HookedTransformer(cfg)
+        model.eval()
+        snapshot = {n: p.detach().clone() for n, p in model.named_parameters()}
+
+        magnitudes = RtnQuantizer(bits=4).weight_delta(model, None)
+        rng, _ = create_seed_generator(3)
+        MatchedMagnitudePerturber().apply(model, magnitudes, rng)
+
+        for name, param in model.named_parameters():
+            assert torch.equal(snapshot[name], param), f"the dense model was mutated at {name}"
 
     def test_magnitude_key_mismatch_is_rejected(self):
         model = MockModel(seed=0, n_layers=1, n_heads=1, d_model=3)
