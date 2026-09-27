@@ -18,8 +18,10 @@ def _cfg(tmp_path, **overrides):
         "pipeline": "mock",
         "setting": "null-matchedmag",
         "comparison_level": "both",
-        "compression_family": "null",
-        "compression_level": "matchedmag-0.30",
+        # A Stage B null names the compression cell it is the null FOR.
+        "compression_family": "magnitude",
+        "compression_level": "0.30",
+        "stage_c": {"cell": "magnitude-0.30", "compressor_kwargs": {"sparsity": 0.3}},
         "model": {"name": "mock", "synthetic": True, "n_layers": 4, "n_heads": 2, "d_model": 8},
         "task": {"name": "synthetic-ioi", "family": "indirect-object-identification-synthetic",
                  "synthetic": True, "n_prompts": 8, "max_seq_len": 32, "seed": 0},
@@ -29,7 +31,7 @@ def _cfg(tmp_path, **overrides):
         "distance": {"name": "l1", "alternative": "jensen_shannon"},
         "comparison": {"level2_scheme": None, "position_policy": None},
         "nulls": {"R": 3},
-        "compression": {"name": "null"},
+        "compression": {"name": "magnitude_30"},
     }
     cfg.update(overrides)
     return cfg

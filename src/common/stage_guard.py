@@ -28,7 +28,9 @@ append-only (new cells for new grid cells only), never edited (AI_RULES.md 1.4).
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 FREEZE_MANIFEST_NAME = "FREEZE_MANIFEST.json"
 FROZEN_META_NAME = "meta.json"
@@ -108,3 +110,64 @@ def assert_null_frozen_hash(meta_path: str | Path, expected_hash: str) -> None:
             f"null_frozen_hash mismatch: expected {expected_hash}, got {actual} "
             f"(frozen store integrity violated; AI_RULES.md 1.4)"
         )
+
+
+# [AI-GEN] agent=Claude date=2026-09-27 task=Guard 3 - the null must be matched to the cell it divides
+def assert_null_matched_to_cell(meta_path: str | Path, expected: Mapping[str, Any]) -> None:
+    """Raise RuntimeError unless the frozen null was matched to THIS compression cell.
+
+    ``assert_null_frozen_hash`` proves the null file is intact. It cannot prove the null
+    was matched to the compression now being divided by it: a null drawn against
+    magnitude-0.3 magnitudes hashes perfectly well while being the wrong denominator for
+    an rtn_int8 cell. That is not hypothetical - Stage B hardcoded a single stand-in
+    compressor for every cell until 2026-09-27, so this guard is what keeps the fix
+    enforced rather than merely applied (AI_RULES.md 1.4, 1.5; ARCHITECTURE.md §4).
+
+    ``expected`` is ``src.compression.registry.compression_provenance(resolved)``.
+    """
+    meta = Path(meta_path)
+    data = _load_json(meta, "frozen meta.json")
+
+    if "compression_family" not in data:
+        raise RuntimeError(
+            f"frozen meta.json at {meta} records no compression provenance, so it cannot "
+            "be shown to match this cell. Nulls written before 2026-09-27 were all matched "
+            "to a hardcoded magnitude-prune stand-in regardless of their cell; re-run "
+            "Stage B for this cell and re-freeze."
+        )
+
+    mismatched = {
+        key: (data.get(key), expected[key])
+        for key in ("compression_family", "compression_level", "compressor_kwargs")
+        if _comparable(data.get(key)) != _comparable(expected.get(key))
+    }
+    if mismatched:
+        detail = "; ".join(
+            f"{k}: frozen={frozen!r} but this run declares {want!r}"
+            for k, (frozen, want) in sorted(mismatched.items())
+        )
+        raise RuntimeError(
+            f"the frozen null at {meta} was matched to a different compression than this "
+            f"run measures ({detail}). CSI would divide D(c) by the median of the wrong "
+            "D_null (ARCHITECTURE.md §4)."
+        )
+
+
+def _comparable(value: Any) -> Any:
+    """Normalize for comparison across the JSON round-trip and Hydra's string coercion.
+
+    Hydra hands ``+stage_c.compressor_kwargs.bits=8`` through as the string ``"8"`` in
+    some paths and the int ``8`` in others, and levels appear as both. Comparing raw
+    values would raise a spurious mismatch on a null that is in fact correctly matched.
+    """
+    if isinstance(value, Mapping):
+        return {str(k): _comparable(v) for k, v in sorted(value.items(), key=lambda kv: str(kv[0]))}
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    try:
+        return float(text)
+    except ValueError:
+        return text.lower()

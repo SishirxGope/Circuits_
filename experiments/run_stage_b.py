@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
     hydra_main = None  # type: ignore[assignment]
 
 from experiments.run_stage_a import PIPELINE_REGISTRY, _build_threshold_configs, _git_commit, _resolve
-from src.compression.magnitude_prune import MagnitudePruner
+from src.compression.registry import compression_provenance, compressor_for
 from src.science.circus_wrapper import CircusEnsembleRunner
 from src.extraction.mock_extractor import MockExtractor
 from src.common.config_guard import (
@@ -76,13 +76,16 @@ def _load_model_guard(resolved: Mapping[str, Any]) -> Any:
     )
 
 
-def _synthetic_dnull_rows(resolved: Mapping[str, Any], model: Any, f_pre: Any) -> tuple[list[dict[str, Any]], dict[str, float]]:
+def _synthetic_dnull_rows(
+    resolved: Mapping[str, Any], model: Any, f_pre: Any, compressor: Any
+) -> tuple[list[dict[str, Any]], dict[str, float]]:
     """Engineering-only D_null computation (matched-magnitude draws on MockModel).
 
-    Magnitudes come from the dry-run magnitude-prune cell (Q7 stand-in); each of the
-    R draws perturbs a COPY of the model and re-extracts the ensemble, then measures
-    L1 and Jensen-Shannon distances vs the dense reference. Deterministic given
-    (config, seed): every draw is seeded (AI_RULES.md 1.1).
+    Magnitudes come from the compressor this cell names (``compression_family`` +
+    ``stage_c.compressor_kwargs``), so the null is matched to the compression it will be
+    the denominator for. Each of the R draws perturbs a COPY of the model and re-extracts
+    the ensemble, then measures L1 and Jensen-Shannon distances vs the dense reference.
+    Deterministic given (config, seed): every draw is seeded (AI_RULES.md 1.1).
     """
     from src.synthetic.mock_model import MockModel
 
@@ -95,12 +98,21 @@ def _synthetic_dnull_rows(resolved: Mapping[str, Any], model: Any, f_pre: Any) -
     configs = _build_threshold_configs(resolved)
     seeds = [seed + i for i in range(S)]
 
-    pruner = MagnitudePruner(
-        sparsity=float(resolved.get("stage_b", {}).get("sparsity", 0.3) or 0.3),
-        global_scope=bool(resolved.get("stage_b", {}).get("global_scope", True)),
-    )
-    magnitudes = pruner.weight_delta(model, resolved)
+    # The null must be matched to THIS cell's compression, not to a fixed stand-in.
+    # This previously hardcoded MagnitudePruner(sparsity=0.3): every one of the 88 Stage B
+    # cells - rtn_int4 through wanda_60 - was matched to magnitude pruning at a sparsity
+    # that is not even in the grid, so CSI would have divided all 88 cells by the same
+    # denominator while the run tags claimed otherwise (ARCHITECTURE.md §4).
+    magnitudes = compressor.weight_delta(model, resolved)
     shapes = model.tensor_shapes()
+
+    if not any(v > 0.0 for v in magnitudes.values()):
+        raise RuntimeError(
+            f"compression cell {compression_provenance(resolved)} produced an all-zero "
+            "weight delta on this model, so every null draw would be a zero perturbation "
+            "and D_null would collapse to a spike at 0. Refusing to write a degenerate "
+            "denominator for CSI."
+        )
 
     runner = CircusEnsembleRunner(MockExtractor())
     f_pre_dict = f_pre.frequencies if hasattr(f_pre, "frequencies") else dict(f_pre)
@@ -150,6 +162,11 @@ def run_stage_b(cfg: Any) -> Path:
     assert_no_gating_questions(resolved, pipeline)
     assert_engineering_dry_run_limits(resolved, stage="stageB")  # refuses freeze in engineering
 
+    # A Stage B null is only meaningful as the null FOR a specific compression cell, so
+    # the cell is validated before a run dir is allocated: a mis-specified cell must not
+    # leave a half-built run behind.
+    compressor = compressor_for(resolved, stage="stageB")
+
     config_hash = hash_config(resolved)
     run_root = Path(resolved.get("run_root", "runs"))
     run_name = resolve_run_name(
@@ -165,7 +182,7 @@ def run_stage_b(cfg: Any) -> Path:
         "stage": "stageB",
         "model": model_cfg["name"],
         "task": task_cfg["name"],
-        "compression_family": resolved.get("compression_family", "null"),
+        "compression_family": compression_provenance(resolved)["compression_family"],
         "compression_level": resolved.get("compression_level"),
         "comparison_level": resolved.get("comparison_level", "both"),
         "pipeline": pipeline,
@@ -189,7 +206,7 @@ def run_stage_b(cfg: Any) -> Path:
     dense_result = runner.run(model=model, task=task_cfg, configs=configs, seeds=seeds)
 
     # --- null draws (engineering path) ---------------------------------------------
-    rows, magnitudes = _synthetic_dnull_rows(resolved, model, dense_result.freq)
+    rows, magnitudes = _synthetic_dnull_rows(resolved, model, dense_result.freq, compressor)
 
     _require_pyarrow()
     import pyarrow as pa
@@ -203,6 +220,9 @@ def run_stage_b(cfg: Any) -> Path:
         "seeds": seeds,
         "R": R,
         "frobenius_magnitudes": {k: float(v) for k, v in sorted(magnitudes.items())},
+        # Provenance of the magnitudes above. null_frozen_hash proves the null file is
+        # intact; this proves it was matched to the cell Stage C divides by.
+        **compression_provenance(resolved),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "git_commit": _git_commit(),
         "null_frozen_hash": hash_file(run_dir / "dnull.parquet"),

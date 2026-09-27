@@ -296,21 +296,32 @@ class TestWeightDeltaFeedsTheNull:
         assert int4 > int8
 
 
+# RTN is deliberately absent from this list: it now has a reviewed real-model path
+# (deploy/BLOCKERS.md B2), so asserting that it refuses real models would assert the
+# opposite of the feature. Its own refusal contract is tested below, and its real-model
+# behaviour in tests/test_rtn_real_model.py. Each remaining compressor moves off this
+# list only when its real path lands.
+_UNIMPLEMENTED = [MagnitudePruner(), WandaPruner(), GptqCompressor(), AwqCompressor()]
+_UNIMPLEMENTED_IDS = ["magnitude", "wanda", "gptq", "awq"]
+
+
 class TestRealModelsAreStillRefused:
-    @pytest.mark.parametrize(
-        "compressor",
-        [RtnQuantizer(), MagnitudePruner(), WandaPruner(), GptqCompressor(), AwqCompressor()],
-        ids=["rtn", "magnitude", "wanda", "gptq", "awq"],
-    )
+    """A compressor with no reviewed real-model path must fail loudly, never silently
+    no-op: a silent pass-through would report zero weight delta, and the matched-magnitude
+    null would then match zero magnitude and make every circuit look perfectly stable."""
+
+    @pytest.mark.parametrize("compressor", _UNIMPLEMENTED, ids=_UNIMPLEMENTED_IDS)
     def test_apply_refuses_non_mock_models(self, compressor):
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="Stage C approval"):
             compressor.apply(object(), {})
 
-    @pytest.mark.parametrize(
-        "compressor",
-        [RtnQuantizer(), MagnitudePruner(), WandaPruner(), GptqCompressor(), AwqCompressor()],
-        ids=["rtn", "magnitude", "wanda", "gptq", "awq"],
-    )
+    @pytest.mark.parametrize("compressor", _UNIMPLEMENTED, ids=_UNIMPLEMENTED_IDS)
     def test_weight_delta_refuses_non_mock_models(self, compressor):
         with pytest.raises(NotImplementedError, match="Stage C approval"):
             compressor.weight_delta(object(), {})
+
+    @pytest.mark.parametrize("method", ["apply", "weight_delta"])
+    def test_rtn_still_refuses_types_it_cannot_handle(self, method):
+        """RTN handles MockModel and torch modules. Anything else must raise, not guess."""
+        with pytest.raises(NotImplementedError, match="neither MockModel"):
+            getattr(RtnQuantizer(), method)(object(), {})

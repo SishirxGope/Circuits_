@@ -64,10 +64,14 @@ def algorithm1(tmp_path_factory):
     frozen, stage_b_dirs = {}, {}
     for family, level, sparsity in CELLS:
         cell = f"{family}-{level}"
+        # Stage B must name the SAME cell Stage C will divide by. Declaring
+        # compression_family="null" here (as this fixture used to) is what the
+        # assert_null_matched_to_cell guard now rejects: the null would be drawn against
+        # one compression and used as the denominator for another.
         b_dir = run_stage_b(_cfg(
             tmp_path, stage="stageB", setting=f"null-matchedmag-{level.replace('.', '')}",
-            compression_family="null", compression_level=f"matchedmag-{level}",
-            stage_b={"sparsity": sparsity, "global_scope": True},
+            compression_family=family, compression_level=level,
+            stage_c={"cell": cell, "compressor_kwargs": {"sparsity": sparsity}},
         ))
         stage_b_dirs[cell] = b_dir
         meta = freeze_cell(frozen_root, "mock", "synthetic-ioi", cell, b_dir,

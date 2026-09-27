@@ -10,10 +10,12 @@ Guards, enforced in this order (each is tested):
 1. Stage tag + required tags (Stage C/D require ``R > 0`` and a non-null
    ``null_frozen_hash``).
 2. **Null before effect** (AI_RULES.md 1.5): the frozen Stage B artifacts must exist,
-   be registered in the freeze manifest, and the declared ``null_frozen_hash`` must
-   match the frozen cell's — ``assert_stage_b_frozen`` + ``assert_null_frozen_hash``.
-   This fires FIRST among the substantive checks: a Stage C run that cannot verify the
-   null it divides by fails hard, before anything else is even considered.
+   be registered in the freeze manifest, the declared ``null_frozen_hash`` must match
+   the frozen cell's, and the frozen null must have been matched to THIS cell's
+   compression — ``assert_stage_b_frozen`` + ``assert_null_frozen_hash`` +
+   ``assert_null_matched_to_cell``. These fire FIRST among the substantive checks: a
+   Stage C run that cannot verify the null it divides by fails hard, before anything
+   else is even considered.
 3. PI-decision guard: scientific_run blocks while final decisions are OPEN.
 4. Mode guard: engineering mode permits Stage C **only** on a provably synthetic stack
    (mock model + synthetic task + mock extractor) and refuses anything that could reach
@@ -68,33 +70,23 @@ from src.common.csi_table import make_csi_row, summarize_csi, write_csi_table
 from src.common.hashing import hash_config
 from src.common.run_dir import allocate_run_dir
 from src.common.run_naming import build_configset, resolve_run_name, sanitize_token
-from src.common.stage_guard import assert_null_frozen_hash, assert_stage_b_frozen
+from src.common.stage_guard import (
+    assert_null_frozen_hash,
+    assert_null_matched_to_cell,
+    assert_stage_b_frozen,
+)
 from src.science.chance_floor import candidate_edge_count, overlap_vs_chance_for_freqs
 from src.science.csi import cells_from_records, csi_over_ensemble
 from src.science.circus_wrapper import CircusEnsembleRunner
+from src.compression.registry import compression_provenance, compressor_for, compressor_registry
 from src.science.csi import csi
 from src.science.decompose import decompose
 from src.science.distances import jensen_shannon_distance, l1_distance, normalized_l1_distance
 from src.science.two_level import project_to_coarse_level, project_to_routing_heads
 
-COMPRESSOR_REGISTRY: dict[str, Any] = {}
-
-
-def _compressor_registry() -> dict[str, Any]:
-    """Lazily built so importing this module never pulls in every compressor."""
-    global COMPRESSOR_REGISTRY
-    if not COMPRESSOR_REGISTRY:
-        from src.compression.awq import AwqCompressor
-        from src.compression.gptq import GptqCompressor
-        from src.compression.magnitude_prune import MagnitudePruner
-        from src.compression.rtn import RtnQuantizer
-        from src.compression.wanda import WandaPruner
-
-        COMPRESSOR_REGISTRY = {
-            "rtn": RtnQuantizer, "gptq": GptqCompressor, "awq": AwqCompressor,
-            "magnitude": MagnitudePruner, "wanda": WandaPruner,
-        }
-    return COMPRESSOR_REGISTRY
+# Kept as a module-level alias: the registry now lives in src/compression/registry.py so
+# Stage B and Stage C cannot drift to different compressors for the same cell.
+_compressor_registry = compressor_registry
 
 
 def frozen_cell_path(resolved: dict[str, Any]) -> Path:
@@ -122,15 +114,12 @@ def _load_dnull(cell: Path, metric: str = "distance_l1") -> list[float]:
 
 
 def _build_compressor(resolved: dict[str, Any]):
-    """Instantiate the compressor for this cell from config; never guess a family."""
-    family = str(resolved.get("compression_family", ""))
-    registry = _compressor_registry()
-    if family not in registry:
-        raise ValueError(
-            f"unknown compression_family {family!r}; expected one of {sorted(registry)}"
-        )
-    kwargs = dict((resolved.get("stage_c") or {}).get("compressor_kwargs") or {})
-    return registry[family](**kwargs)
+    """Instantiate the compressor for this cell from config; never guess a family.
+
+    Same call Stage B makes, so the compression measured here is the compression the
+    frozen null was matched to.
+    """
+    return compressor_for(resolved, stage="stageC")
 
 
 def _load_model(resolved: dict[str, Any]):
@@ -197,6 +186,9 @@ def run_stage_c(cfg: Any) -> Path:
     cell = frozen_cell_path(resolved)
     assert_stage_b_frozen(cell)
     assert_null_frozen_hash(cell / "meta.json", null_hash)
+    # ...and that the intact null is the RIGHT null: matched to this cell's compression,
+    # not merely present and unmodified.
+    assert_null_matched_to_cell(cell / "meta.json", compression_provenance(resolved))
 
     assert_no_gating_questions(resolved, pipeline)
     assert_engineering_dry_run_limits(resolved, stage="stageC")

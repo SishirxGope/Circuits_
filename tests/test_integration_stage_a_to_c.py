@@ -73,9 +73,10 @@ def _stage_a(tmp_path):
 
 
 def _stage_b(tmp_path):
+    # Same cell the Stage C fixture below declares, so the null is the null FOR that cell.
     return run_stage_b(_base(tmp_path, "stageB", setting="null-matchedmag",
-                             compression_family="null", compression_level="matchedmag-0.30",
-                             stage_b={"sparsity": 0.30, "global_scope": True}))
+                             compression_family="magnitude", compression_level="0.30",
+                             stage_c={"cell": CELL, "compressor_kwargs": {"sparsity": 0.30}}))
 
 
 def _freq(run_dir: Path) -> dict[str, float]:
@@ -146,7 +147,8 @@ class TestStageCOrdering:
 
     def _cfg(self, tmp_path, **overrides):
         defaults = {"compression_family": "magnitude", "compression_level": "0.30",
-                    "frozen_root": str(tmp_path / "frozen"), "stage_c": {"cell": CELL},
+                    "frozen_root": str(tmp_path / "frozen"),
+                    "stage_c": {"cell": CELL, "compressor_kwargs": {"sparsity": 0.30}},
                     "null_frozen_hash": "0" * 64}
         return _base(tmp_path, "stageC", **{**defaults, **overrides})
 
