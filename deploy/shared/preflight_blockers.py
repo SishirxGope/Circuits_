@@ -28,6 +28,36 @@ class _NotAMockModel:
     """A stand-in real model: not a MockModel, so the real code path must handle it."""
 
 
+def _probe_model():
+    """The object a real-model code path is handed by this preflight.
+
+    A bare sentinel is NOT good enough for the compressor probe. A correctly implemented
+    compressor refuses an object that is neither a MockModel nor a torch module - with
+    NotImplementedError, which this file reads as "still a stub". That made RTN report
+    BLOCKED after its real path landed, and since ``assert_preflight`` gates the whole
+    science queue, the gate would never have opened.
+
+    So we hand the probe a genuine torch module carrying one projection-shaped parameter.
+    An implemented compressor quantizes/prunes it and returns; a stub still raises.
+    Falls back to the sentinel where torch is absent, which keeps every family BLOCKED -
+    the safe direction.
+    """
+    try:
+        import torch
+        from torch import nn
+    except Exception:  # noqa: BLE001 - no torch: stay conservative
+        return _NotAMockModel()
+
+    class _TinyProjection(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            # Named to match the projection suffixes the compressors select on.
+            self.W_Q = nn.Parameter(torch.randn(2, 8, 4, generator=torch.Generator().manual_seed(0)))
+            self.W_out = nn.Parameter(torch.randn(16, 8, generator=torch.Generator().manual_seed(1)))
+
+    return _TinyProjection()
+
+
 def _probe(fn, *args) -> tuple[bool, str]:
     """Call fn; return (implemented, detail).
 
@@ -77,8 +107,16 @@ def check_compressors() -> list[tuple[str, bool, str]]:
         except Exception as exc:  # noqa: BLE001
             out.append((label, False, f"could not instantiate: {exc}"))
             continue
-        ok, detail = _probe(inst.apply, _NotAMockModel(), None)
-        out.append((label, ok, detail))
+        # Both halves of the Compressor protocol: Stage C needs apply(), Stage B needs
+        # weight_delta() for the null magnitudes. One without the other is not usable.
+        apply_ok, apply_detail = _probe(inst.apply, _probe_model(), None)
+        delta_ok, delta_detail = _probe(inst.weight_delta, _probe_model(), None)
+        if apply_ok and not delta_ok:
+            out.append((label, False, f"apply() ok but weight_delta() {delta_detail}"))
+        elif delta_ok and not apply_ok:
+            out.append((label, False, f"weight_delta() ok but apply() {apply_detail}"))
+        else:
+            out.append((label, apply_ok, apply_detail))
     return out
 
 

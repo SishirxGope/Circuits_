@@ -4,7 +4,7 @@
 # from two different machines are comparable.
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/_common.sh"
 
-echo "=== 1. test suite (must match the PC baseline: 511 passed, 1 skipped) ==="
+echo "=== 1. test suite (must match the PC baseline: 542 passed, 1 skipped) ==="
 "$PY" -m pytest -q
 
 echo ""
