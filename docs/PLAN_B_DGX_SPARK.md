@@ -30,7 +30,7 @@ specifications; it covers getting them running on different hardware.
 for both machines in order. This document explains *why* each step is what it is.
 
 **Executable version:** [`../deploy/plan_b_dgx_spark/`](../deploy/plan_b_dgx_spark/) holds a
-numbered script per step, the 88-cell run queues, a parallel runner and a printable checklist.
+numbered script per step, the 66-cell run queues, a parallel runner and a printable checklist.
 This document is the reasoning; that folder is the doing. Start with `00_inspect_hardware.sh`.
 
 > **Missing on the PC as of 2026-09-21: both upstream forks.** `circuit-tracer-0.5.2/` and
@@ -279,7 +279,7 @@ results from two machines are comparable.
 
 ```bash
 # 1. Test suite — must match the PC baseline
-pytest -q                      # expect: 617 passed, 1 skipped (or 618 passed once the exit gate lands)
+pytest -q                      # expect: 644 passed, 1 skipped (or 645 passed once the exit gate lands)
 
 # 2. Pinned loading works, including the architecture check
 python -c "

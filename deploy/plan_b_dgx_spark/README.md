@@ -4,7 +4,8 @@
 it expects, what it changes, and what to do when it fails.
 
 **Scope:** the entire grid — Pythia-160M, Pythia-410M, Gemma-2-2B, Llama-3.2-1B, both tasks,
-all 11 compression cells. 88 cells per stage.
+all 11 compression cells. 66 cells per stage (the 22 greater_than cells on Gemma-2 and
+Llama-3.2 are structurally impossible under their tokenizers - see deploy/shared/gen_cells.py).
 
 Full reasoning: [`../../docs/PLAN_B_DGX_SPARK.md`](../../docs/PLAN_B_DGX_SPARK.md)
 

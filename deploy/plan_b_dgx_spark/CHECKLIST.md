@@ -39,7 +39,7 @@
 - [ ] kv-heads check run on Gemma-2 and Llama-3.2
 - [ ] If GQA: head-group mapping written and tested before Stage A
 
-## Stage B — 88 cells
+## Stage B — 66 cells
 - [ ] Ran with `-P 1` first and verified one cell
 - [ ] Scaled per-model, memory watched
 - [ ] tmux/screen used
@@ -52,7 +52,7 @@
 - [ ] Manifest hash recorded; `frozen/` committed locally
 
 ## Stage C, D, analysis
-- [ ] All 88 Stage C cells ran, no hash mismatches
+- [ ] All 66 Stage C cells ran, no hash mismatches
 - [ ] CSI table with bootstrap CIs over B, S, r; BH at q = 0.05
 - [ ] Both comparison levels reported
 - [ ] Cross-audit against the FROZEN CSV (rho range -0.540..0.062; Gemma PPL 8.21)

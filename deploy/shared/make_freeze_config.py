@@ -3,7 +3,7 @@
 #
 # experiments/freeze_stage_b.py takes --config <resolved config JSON> and reads
 # stage_b.cells = [{model, task, cell, source_run_dir}, ...]. Assembling that list by hand
-# across 44 (Plan A) or 88 (Plan B) cells is where a mistake would be both easy and
+# across 44 (Plan A) or 66 (Plan B) cells is where a mistake would be both easy and
 # invisible: a cell pointing at the wrong run directory freezes the wrong null, and Stage C
 # would happily compare against it.
 #

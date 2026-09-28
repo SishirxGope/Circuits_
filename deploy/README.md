@@ -68,7 +68,7 @@ See [`BLOCKERS.md`](BLOCKERS.md) for the specification of each missing piece.
 
 - **The compression grid** — 11 cells in `configs/compression/`, generated and verified to
   compose through Hydra.
-- **The run queues** — 44 cells (Plan A) and 88 cells (Plan B) per stage, generated from the
+- **The run queues** — 44 cells (Plan A) and 66 cells (Plan B) per stage, generated from the
   same table so the cell keys cannot drift apart. A mismatch between a frozen null's cell key
   and Stage C's cell key is a hash error that sends you looking in the wrong place.
 - **Every orchestration script** — stage runners, resumable queues, the freeze with its typed

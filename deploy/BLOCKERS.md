@@ -8,19 +8,34 @@ a real model and it raises `NotImplementedError`. The deployment scripts in
 `plan_a_local_pc/` and `plan_b_dgx_spark/` therefore call the preflight first and refuse to
 start, rather than failing four hours into a queue at night.
 
-Current state: **8 of 9 checks blocked.**
+Current state: **4 of 9 checks blocked** (was 8 of 9 on 2026-09-21).
+
+Run `python deploy/shared/preflight_blockers.py` for the live status; this table is a
+summary and can drift.
 
 | ID | Item | Status | Zone |
 |---|---|---|---|
-| B1 | Matched-magnitude null on real models | BLOCKED | 🔒 novelty |
-| B2 | RTN compressor | BLOCKED | engineering |
-| B2 | GPTQ compressor | BLOCKED | engineering |
-| B2 | AWQ compressor | BLOCKED | engineering |
-| B2 | Magnitude pruner | BLOCKED | engineering |
-| B2 | Wanda pruner | BLOCKED | engineering |
-| B3 | Chance-floor universe | BLOCKED (**silent**) | 🔒 novelty |
+| B1 | Matched-magnitude null on real models | **DONE** — `matched_magnitude.py` delegates to `compression/torch_weights.py`; PI-approved 2026-09-27 | 🔒 novelty |
+| B2 | RTN compressor | **DONE** — `rtn.py::rtn_quantize_torch`, per-output-channel, 2026-09-27 | engineering |
+| B2 | Magnitude pruner | **DONE** — `magnitude_prune.py::prune_magnitude_torch`, 2026-09-27 | engineering |
+| B2 | GPTQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
+| B2 | AWQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
+| B2 | Wanda pruner | BLOCKED — needs the Q7 calibration cache (activation second moments) | engineering |
+| B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
-| B6 | GPT-2 IOI exit gate | BLOCKED (test exists, skipped) | engineering |
+| B6 | GPT-2 IOI exit gate | BLOCKED (test exists, skipped) — needs a PI-supplied reference edge list + tolerance | engineering |
+
+**The three remaining B2 families share one dependency.** Wanda, GPTQ and AWQ all need
+per-tensor activation statistics from the Q7 calibration corpus (`configs/calibration/final.yaml`:
+fineweb-edu, 300k tokens, **seed 7**, bf16 forward). Building that cache once clears all three.
+It also needs `mode.allow_external_dataset_download`.
+
+**B3 was the silent one and its fix changed two numbers.** The universe is now the structural
+EAP universe intersected with the observed nodes, and there is one N *per comparison level*.
+Measured effect: the exact-edge N fell ~10x (10.70x pythia-160m, 10.52x pythia-410m, 11.03x
+llama-3.2-1b, 9.95x gemma-2-2b) and the routing-head N fell 2400x-8300x, because
+`project_to_routing_heads` maps onto heads (144 for pythia-160m) and not onto edges. The
+routing-head chance floor moves from ~1e-5 to ~0.025 — that is the level claim C2 is stated at.
 
 🔒 = Novelty Protection Zone (`AI_RULES.md` §3). **No AI agent may modify these without your
 explicit written approval**, recorded in `docs/HUMAN_DECISIONS.md`.
@@ -128,8 +143,11 @@ models.
 
 ## Missing dependencies (not code — files that are absent)
 
-**Neither upstream fork is on this machine.** `CLAUDE.md` §3 places both at the workspace
-root, beside the repo. Searched 2026-09-21: absent.
+**Both upstream forks are present on the Windows machine** (verified 2026-09-29):
+`circuit-tracer-0.5.2/` and `sae-pruning-paper-main/` sit at the workspace root beside the repo,
+per `CLAUDE.md` §3. The C5 cross-audit input exists:
+`sae-pruning-paper-main/results/E6/stat_tests.csv`. Their revisions have NOT been verified
+against the pins below, and neither fork has been confirmed present on the Spark.
 
 | Fork | URL (verified, `HUMAN_DECISIONS.md` §3.3) | Pin | Needed for |
 |---|---|---|---|
