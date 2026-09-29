@@ -1,4 +1,5 @@
 # [AI-GEN] agent=Claude date=2026-09-29 task=Tests for real-model GPTQ and AWQ (torch ports of the reference code)
+# modified: [AI-GEN] agent=Claude date=2026-09-29 task=review fixes - AWQ feature memory, cache identity and lock, delta without a copy
 # reviewed-by: PENDING
 
 """Real-model GPTQ and AWQ (src/compression/{layerwise,gptq,awq}.py).
@@ -14,6 +15,7 @@ propagation, AWQ's per-architecture rules, and the on-disk result both stages sh
 from __future__ import annotations
 
 import copy
+import threading
 
 import numpy as np
 import pytest
@@ -25,6 +27,7 @@ import reference_awq
 import reference_gptq
 from tiny_tl import ARCHS, tiny_model
 
+from src.calibration.cache_lock import cache_lock, partial_path
 from src.calibration.second_moment import collect_second_moments
 from src.calibration.token_cache import (
     CalibrationUnavailable,
@@ -34,6 +37,7 @@ from src.calibration.token_cache import (
 )
 from src.compression import awq as awq_module
 from src.compression import gptq as gptq_module
+from src.compression import layerwise as layerwise_module
 from src.compression.awq import (
     AwqCompressor,
     awq_clip_max,
@@ -50,10 +54,15 @@ from src.compression.gptq import (
 from src.compression.layerwise import (
     as_matrix,
     block_source,
+    code_digest,
     embed_batches,
     from_matrix,
+    measured_delta,
     projection_kind,
+    projections_by_layer,
     run_block,
+    tensors_delta,
+    with_tensors,
 )
 from src.compression.torch_weights import null_draw_inputs, projection_parameters
 
@@ -139,7 +148,7 @@ class TestTheWalk:
             if not name.startswith("blocks.0."):
                 continue
             source = block_source(projection_kind(name))
-            mine = (sums[source] / counts[source]).numpy()
+            mine = (sums[source] / counts[source]).cpu().numpy()  # TL puts models on cuda:0 when it can
             assert np.allclose(mine, wanda[name].reshape(-1), rtol=1e-6), name
 
     def test_no_hook_is_left_behind(self, model, tokens):
@@ -329,7 +338,7 @@ class TestAwqPlumbing:
         (T // n)-th token of all T, counted across batch boundaries."""
         from src.compression.awq import _LayerFeatures
 
-        feats = _LayerFeatures()
+        feats = _LayerFeatures({"src"})
         g = torch.Generator().manual_seed(0)
         xs = [torch.randn(3, 7, 5, generator=g) for _ in range(4)]  # 84 tokens, batches of 21
         for x in xs:
@@ -453,6 +462,37 @@ class TestAwqPlumbing:
         assert next(out.parameters()).dtype == torch.float32
 
 
+class TestAwqKeepsOnlyWhatItReads:
+    """Under split-qkv the attention inputs arrive as one slice of a [b, p, heads, d] tensor;
+    keeping the slice kept every head's copy (32x on Llama-3.2-1B). Now: clones, and only
+    the sources a search or a clip reads."""
+
+    def test_each_kept_input_owns_only_its_own_storage(self, model, tokens):
+        rules = awq_module.arch_rules(model.cfg)
+        kinds = projections_by_layer(model)[0]
+        feats = awq_module._LayerFeatures(awq_module.awq_sources(model.cfg, kinds, rules, clip=True))
+        layout = {}
+        batches = embed_batches(model, tokens, n_seq=6, batch_size=4, dtype=None)
+        run_block(model.blocks[0], batches, on_input=feats, layout=layout)
+        assert any(heads is not None for heads in layout.values())  # the case that leaked
+        assert set(feats.batches) == feats.wanted
+        for source, xs in feats.batches.items():
+            for x in xs:
+                assert x.untyped_storage().nbytes() == x.numel() * x.element_size(), source
+
+    @pytest.mark.parametrize("clip", [True, False])
+    def test_the_key_input_is_never_kept(self, model, clip):
+        rules = awq_module.arch_rules(model.cfg)
+        kinds = projections_by_layer(model)[0]
+        wanted = awq_module.awq_sources(model.cfg, kinds, rules, clip=clip)
+        assert block_source("W_K") not in wanted
+        base = {block_source("W_Q"), block_source("W_in"), block_source("W_out")}
+        assert base <= wanted
+        if not clip:
+            extra = {block_source("W_O")} if awq_module._searches_v_to_o(model.cfg, rules) else set()
+            assert wanted == base | extra
+
+
 def _mha_llama():
     import transformer_lens
 
@@ -538,6 +578,65 @@ class TestStageBAndStageCShareOneCompression:
     def test_without_the_token_cache_it_is_missing_data(self, tmp_path):
         with pytest.raises(CalibrationUnavailable):
             GptqCompressor().apply(tiny_model("llama"), self._resolved(tmp_path))
+
+    def test_the_model_dtype_is_part_of_the_identity(self, tmp_path):
+        model = tiny_model("llama")
+        resolved = self._resolved(tmp_path)
+        save_token_cache(cache_path(resolved), synthetic_token_cache(4, 16, VOCAB, seed=2), {})
+        GptqCompressor().apply(model, resolved)
+        GptqCompressor().apply(copy.deepcopy(model).to(torch.bfloat16), resolved)
+        assert len(list((tmp_path / "compressed").glob("gptq_*.pt"))) == 2
+
+    def test_a_code_change_is_a_different_file(self, tmp_path, monkeypatch):
+        model = tiny_model("llama")
+        resolved = self._resolved(tmp_path)
+        save_token_cache(cache_path(resolved), synthetic_token_cache(4, 16, VOCAB, seed=2), {})
+        GptqCompressor().apply(model, resolved)
+        monkeypatch.setattr(layerwise_module, "code_digest", lambda method: "0" * 16)
+        GptqCompressor().apply(model, resolved)
+        assert len(list((tmp_path / "compressed").glob("gptq_*.pt"))) == 2
+
+    def test_the_code_digest_is_per_method_and_stable(self):
+        assert code_digest("gptq") == code_digest("gptq") != code_digest("awq")
+
+    def test_no_temporary_file_is_left_behind(self, tmp_path):
+        model = tiny_model("llama")
+        resolved = self._resolved(tmp_path)
+        save_token_cache(cache_path(resolved), synthetic_token_cache(4, 16, VOCAB, seed=2), {})
+        GptqCompressor().apply(model, resolved)
+        assert not list((tmp_path / "compressed").glob("*.partial*"))
+
+    def test_a_second_process_waits_for_the_first(self, tmp_path):
+        path, order = tmp_path / "x.pt", []
+
+        def waiter():
+            with cache_lock(path):
+                order.append("waiter")
+
+        with cache_lock(path):
+            thread = threading.Thread(target=waiter)
+            thread.start()
+            thread.join(timeout=0.5)
+            assert thread.is_alive()  # blocked while the lock is held
+            order.append("holder")
+        thread.join(timeout=30)
+        assert order == ["holder", "waiter"]
+
+    def test_temporary_names_never_collide(self, tmp_path):
+        assert partial_path(tmp_path / "x.pt", ".pt") != partial_path(tmp_path / "x.pt", ".pt")
+
+
+class TestTheDeltaNeedsNoModelCopy:
+    def test_it_equals_the_delta_of_the_compressed_model(self, model, tokens):
+        tensors = GptqCompressor(calibration=tokens)._quantized(model, None)
+        assert tensors_delta(model, tensors) == measured_delta(model, with_tensors(model, tensors))
+
+    def test_unknown_or_misshapen_tensors_are_refused(self, model):
+        name, param = next(iter(model.named_parameters()))
+        with pytest.raises(ValueError, match="lacks"):
+            tensors_delta(model, {"blocks.99.nope": param})
+        with pytest.raises(ValueError, match="shape"):
+            tensors_delta(model, {name: param.reshape(-1)[:1]})
 
 
 class TestTheGpu:

@@ -8,9 +8,11 @@
 #   - awq/quantize/auto_scale.py::auto_scale_block / _search_module_scale / apply_scale
 #   - awq/quantize/auto_clip.py::auto_clip_layer / auto_clip_block / apply_clip
 #   - awq/quantize/pre_quant.py::run_awq (the layer loop)
-#   - Gemma-2's scaling groups are not in llm-awq; they follow AutoAWQ
-#     (github.com/casper-hansen/AutoAWQ awq/models/gemma2.py, MIT), which uses the same four
-#     groups as llm-awq's Llama. Licence text: THIRD_PARTY_LICENSES/llm-awq-LICENSE.txt
+#   - Gemma-2's scaling groups are not in llm-awq. AutoAWQ's awq/models/gemma2.py
+#     (github.com/casper-hansen/AutoAWQ @ 88e4c76b20755db275574e6a03c83c84ba3bece5, MIT) was
+#     CONSULTED, not adapted: it uses the same four groups as llm-awq's Llama (ln1 -> QKV,
+#     V -> O when the shapes match, pre-feedforward norm -> gate+up, up -> down), so no
+#     code of it is included here. Licence text: THIRD_PARTY_LICENSES/llm-awq-LICENSE.txt
 
 """AWQ quantization (compression grid, proposal §3.2).
 
@@ -64,9 +66,9 @@ from .layerwise import (
     cast_copy,
     embed_batches,
     from_matrix,
-    measured_delta,
     projections_by_layer,
     run_block,
+    tensors_delta,
     with_tensors,
 )
 from .torch_weights import is_torch_model
@@ -171,9 +173,15 @@ def awq_clip_max(
 
 
 class _LayerFeatures:
-    """Every projection input of one dense layer, kept per batch in the calibration dtype."""
+    """The projection inputs one dense layer's searches read, kept per batch in the calibration dtype.
 
-    def __init__(self) -> None:
+    Only ``wanted`` sources are kept, and each is a CLONE: under split-qkv the attention
+    inputs arrive as a slice of a ``[b, p, heads, d]`` tensor, and keeping the slice would
+    keep all ``heads`` copies alive (32x the activation on Llama-3.2-1B).
+    """
+
+    def __init__(self, wanted: set[str] | frozenset[str]) -> None:
+        self.wanted = frozenset(wanted)
         self.batches: dict[str, list[Any]] = {}
         self.abs_sum: dict[str, Any] = {}
         self.count: dict[str, int] = {}
@@ -181,7 +189,9 @@ class _LayerFeatures:
     def __call__(self, source: str, x: Any) -> None:
         import torch
 
-        self.batches.setdefault(source, []).append(x.detach())
+        if source not in self.wanted:
+            return
+        self.batches.setdefault(source, []).append(x.detach().clone())
         flat = x.detach().reshape(-1, x.shape[-1]).to(torch.float32)
         total = flat.abs().sum(dim=0)
         self.abs_sum[source] = total if source not in self.abs_sum else self.abs_sum[source] + total
@@ -207,6 +217,28 @@ class _LayerFeatures:
             rows.append(flat[(-offset) % step::step])
             offset += int(flat.shape[0])
         return torch.cat(rows, dim=0)
+
+
+def _searches_v_to_o(cfg: Any, rules: dict[str, Any]) -> bool:
+    """llm-awq: ``v_proj.weight.shape == o_proj.weight.shape`` ([n_kv*dh, d] vs [d, n*dh])."""
+    n_heads = int(cfg.n_heads)
+    n_kv = int(getattr(cfg, "n_key_value_heads", None) or n_heads)
+    d_model, d_head = int(cfg.d_model), int(cfg.d_head)
+    return bool(rules["v_to_o"]) and n_kv * d_head == d_model and n_heads * d_head == d_model
+
+
+def awq_sources(cfg: Any, kinds: dict[str, str], rules: dict[str, Any], *, clip: bool) -> set[str]:
+    """The block-local input sources one layer's scale searches and clipping read.
+
+    The attention search replays the module from the query input alone (the three inputs
+    are one ln1 output), and W_K is never clipped, so the key input is never kept.
+    """
+    wanted = {block_source("W_Q"), block_source("W_in"), block_source("W_out")}
+    if _searches_v_to_o(cfg, rules):
+        wanted.add(block_source("W_O"))
+    if clip:
+        wanted |= {block_source(kind) for kind in kinds if kind not in rules["clip_skip"]}
+    return wanted
 
 
 def _awq_layer(
@@ -235,7 +267,7 @@ def _awq_layer(
     if dense is block:
         dense = copy.deepcopy(block)  # trial weights are written into it; never the model's
     run_dtype = next(dense.parameters()).dtype
-    feats = _LayerFeatures()
+    feats = _LayerFeatures(awq_sources(cfg, kinds, rules, clip=clip))
     layout: dict[str, Any] = {}
     next_batches = run_block(dense, batches, on_input=feats, layout=layout)
 
@@ -306,11 +338,7 @@ def _awq_layer(
     for kind in qkv:
         s_in[kind] = s_qkv
 
-    n_heads = int(cfg.n_heads)
-    n_kv = int(getattr(cfg, "n_key_value_heads", None) or n_heads)
-    d_model, d_head = int(cfg.d_model), int(cfg.d_head)
-    # llm-awq: `v_proj.weight.shape == o_proj.weight.shape` ([n_kv*dh, d] vs [d, n*dh])
-    if rules["v_to_o"] and n_kv * d_head == d_model and n_heads * d_head == d_model:
+    if _searches_v_to_o(cfg, rules):
         s_o = search(["W_O"], block_source("W_O"), linear("W_O"))
         s_in["W_O"] = s_o
         s_out["W_V"] = s_o
@@ -481,7 +509,7 @@ class AwqCompressor:
         if isinstance(model, MockModel):
             return model.weight_delta_frobenius(self.apply(model, cfg))
         if is_torch_model(model):
-            return measured_delta(model, self.apply(model, cfg))
+            return tensors_delta(model, self._quantized(model, cfg))  # no model copy
         raise NotImplementedError(
             "awq weight_delta supports MockModel and TransformerLens models; "
             f"got {type(model).__name__}."

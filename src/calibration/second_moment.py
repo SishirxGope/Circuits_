@@ -62,6 +62,7 @@ from typing import Any
 
 import numpy as np
 
+from .cache_lock import cache_lock, partial_path
 from .token_cache import (
     cache_path,
     calibration_root,
@@ -275,20 +276,28 @@ def load_or_collect_second_moments(
         "token_cache_fingerprint": cache_meta["fingerprint"],
         "n_tokens": spec["n_tokens"],
     }
-    if path.exists():
-        with np.load(path, allow_pickle=False) as stored:
-            meta = json.loads(str(stored["__meta__"]))
+    def stored() -> dict[str, np.ndarray]:
+        with np.load(path, allow_pickle=False) as data:
+            meta = json.loads(str(data["__meta__"]))
             if meta != identity:
                 raise ValueError(f"{path} was collected for {meta}, not {identity}")
-            return {key: stored[key] for key in stored.files if key != "__meta__"}
+            return {key: data[key] for key in data.files if key != "__meta__"}
 
-    stats = collect_second_moments(
-        model, tokens, n_tokens=spec["n_tokens"], batch_size=batch_size, dtype=spec["dtype"]
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.stem + ".partial.npz")
-    np.savez(tmp, __meta__=np.array(json.dumps(identity, sort_keys=True)), **stats)
-    os.replace(tmp, path)  # atomic: a crash never leaves a half-written file under the real name
+    if path.exists():
+        return stored()
+    # parallel cells of one model all want this file: one collects, the rest wait and load
+    with cache_lock(path):
+        if path.exists():
+            return stored()
+        stats = collect_second_moments(
+            model, tokens, n_tokens=spec["n_tokens"], batch_size=batch_size, dtype=spec["dtype"]
+        )
+        tmp = partial_path(path, ".npz")
+        try:
+            np.savez(tmp, __meta__=np.array(json.dumps(identity, sort_keys=True)), **stats)
+            os.replace(tmp, path)  # atomic: a crash never leaves a half-written file under the real name
+        finally:
+            tmp.unlink(missing_ok=True)
     return stats
 
 

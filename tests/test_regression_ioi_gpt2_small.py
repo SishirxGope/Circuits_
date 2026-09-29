@@ -1,5 +1,6 @@
 # [AI-GEN] agent=OpenCode date=2026-08-07 task=Phase-1 exit-gate regression test (IOI on GPT-2 small)
 # modified: [AI-GEN] agent=Claude date=2026-09-29 task=B6 - PI file carries edges AND tolerance; a pass leaves a record preflight can verify
+# modified: [AI-GEN] agent=Claude date=2026-09-29 task=review fix - a gate run removes the previous pass record first
 # reviewed-by: PENDING
 
 """Phase-1 exit gate (ARCHITECTURE.md §6): reproduce one published reference circuit
@@ -180,6 +181,20 @@ class TestTheReferenceFile:
         assert REFERENCE_FILE.resolve().is_relative_to(REPO)
 
 
+class TestThePassRecord:
+    def test_a_run_that_fails_removes_the_previous_pass(self, tmp_path, monkeypatch):
+        """Otherwise a regression after one pass would leave B6 open on an old record."""
+        reference = tmp_path / "ref.json"
+        reference.write_text(json.dumps(TestTheReferenceFile.GOOD), encoding="utf-8")
+        record = tmp_path / "pass.json"
+        record.write_text("{}", encoding="utf-8")
+        monkeypatch.setitem(globals(), "REFERENCE_FILE", reference)
+        monkeypatch.setitem(globals(), "PASS_RECORD", record)
+        with pytest.raises(NotImplementedError):
+            test_ioi_gpt2_small_reference_gate()
+        assert not record.exists()
+
+
 @pytest.mark.skipif(
     not os.environ.get(REFERENCE_EDGES_ENV),
     reason=(
@@ -198,7 +213,10 @@ def test_ioi_gpt2_small_reference_gate():
             f"reference file missing: {REFERENCE_FILE} "
             "(PI must provide edges + tolerance and commit it; HUMAN_DECISIONS.md Step 7)"
         )
-    reference, tolerance = load_reference()
+    reference, tolerance = load_reference(REFERENCE_FILE)
+    # A record from an earlier pass must not outlive a run that fails: only THIS run's
+    # pass may open B6, so the old record goes before anything can fail.
+    PASS_RECORD.unlink(missing_ok=True)
     extracted = extract_gate_edges()
 
     overlap = edge_overlap(extracted, reference)

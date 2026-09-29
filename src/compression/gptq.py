@@ -53,9 +53,9 @@ from .layerwise import (
     from_matrix,
     injected_tokens,
     load_or_compute,
-    measured_delta,
     projections_by_layer,
     run_block,
+    tensors_delta,
     with_tensors,
 )
 from .torch_weights import is_torch_model
@@ -312,7 +312,7 @@ class GptqCompressor:
         if isinstance(model, MockModel):
             return model.weight_delta_frobenius(self.apply(model, cfg))
         if is_torch_model(model):
-            return measured_delta(model, self.apply(model, cfg))
+            return tensors_delta(model, self._quantized(model, cfg))  # no model copy
         raise NotImplementedError(
             "gptq weight_delta supports MockModel and TransformerLens models; "
             f"got {type(model).__name__}."

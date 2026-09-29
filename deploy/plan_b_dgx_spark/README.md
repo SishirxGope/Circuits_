@@ -57,7 +57,7 @@ The steps below are the same things it runs; call them individually when you wan
 | Step | Script | What it does |
 |---|---|---|
 | 0 | `00_inspect_hardware.sh` | Records the real hardware into `docs/spark_environment.md`. **Install nothing before this.** |
-| 1 | `01_setup_env.sh` | Verifies torch+CUDA, installs the project, attempts GPTQ/AWQ |
+| 1 | `01_setup_env.sh` | Verifies torch+CUDA, installs the project (GPTQ/AWQ need no package) |
 | 2 | `02_restore_repo.sh` | Restores repo, HF cache, `frozen/` and the forks from the bundle |
 | 3 | `03_verify_gate.sh` | **The gate.** Tests, loader, Pythia reproduction, manifest |
 | 4 | `04_timing.sh` | Re-measures per-pass time for all four models, then re-apply Q3 |
@@ -135,6 +135,10 @@ prevent.
 
 ## Nothing runs yet
 
-Steps 5–8 refuse until `python deploy/shared/preflight_blockers.py` passes. As of 2026-09-21,
-8 of 9 checks are blocked — the real-model compressors and the null perturber are stubs. See
-[`../BLOCKERS.md`](../BLOCKERS.md) for what each one needs.
+Steps 5–8 refuse until `python deploy/shared/preflight_blockers.py` passes. As of 2026-09-29,
+1 of 10 checks is blocked: B6, the GPT-2 IOI exit gate, which needs the PI's reference file
+and the GPT-2 extraction wiring. See [`../BLOCKERS.md`](../BLOCKERS.md).
+
+Meanwhile, `python deploy/shared/smoke_gptq_awq.py <model>` runs GPTQ and AWQ once on a real
+model at full calibration size and prints time and peak GPU memory. It writes nothing that a
+stage reads, so it is safe to run before the gate opens.

@@ -204,7 +204,8 @@ and checks it against the reference file's current sha256 and your tolerance.
    dense IOI ensemble, and that run's core-band edges. Until then the gate raises rather
    than report an overlap it never measured.
 3. **Then:** `RUN_IOI_GPT2_REFERENCE=1 python -m pytest tests/test_regression_ioi_gpt2_small.py`
-   on the Spark; a pass writes the record and B6 opens.
+   on the Spark; a pass writes the record and B6 opens. Each gate run deletes the
+   previous record before it extracts anything, so a later failing run closes B6 again.
 
 Fixed on the way: the test looked for the reference file one directory *above* the repo,
 so a file placed in `data/reference/` would never have been found.
