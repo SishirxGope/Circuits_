@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -52,17 +53,29 @@ def test_the_compressor_probe_is_handed_a_real_torch_module(preflight):
 
 
 def test_b2_status_matches_which_families_are_actually_implemented(preflight):
-    """RTN and magnitude landed 2026-09-27, Wanda's code 2026-09-29. GPTQ and AWQ have no
-    real-model path, so they must keep gating the queue."""
+    """RTN and magnitude landed 2026-09-27; Wanda, GPTQ and AWQ 2026-09-29."""
     pytest.importorskip("torch")
     status = {
         label.replace("B2 compressor: ", ""): ok
         for label, ok, _ in preflight.check_compressors()
     }
-    for family in ("rtn", "magnitude", "wanda"):
+    for family in ("rtn", "gptq", "awq", "magnitude", "wanda"):
         assert status[family] is True, f"{family} is implemented; a BLOCKED keeps the gate shut"
-    for family in ("gptq", "awq"):
-        assert status[family] is False, f"{family} has no real-model path yet"
+
+
+def test_the_calibrated_quantizers_are_probed_on_a_real_transformerlens_model(preflight):
+    """GPTQ and AWQ walk model.blocks; handed the bare-parameter probe they raise
+    TypeError, which _probe would score as "real path entered" - a false OK."""
+    pytest.importorskip("transformer_lens")
+    model = preflight._probe_tl_model()
+    assert hasattr(model, "blocks") and hasattr(model, "cfg")
+    assert model.cfg.original_architecture == "LlamaForCausalLM"
+    assert model.cfg.d_model % 128 == 0 and model.cfg.d_mlp % 128 == 0, "AWQ's group size is 128"
+
+    from src.compression.gptq import GptqCompressor
+
+    with pytest.raises(TypeError):
+        GptqCompressor(calibration=preflight._probe_tokens()).apply(preflight._probe_model(), None)
 
 
 def test_the_wanda_probe_statistics_can_tell_wanda_from_magnitude(preflight):
@@ -88,7 +101,7 @@ class TestCalibrationData:
 
         registry = {"caches": {}}
         calibration = yaml.safe_load((REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8"))
-        for model in preflight._wanda_models():
+        for model in preflight._calibrated_models():
             model_cfg = yaml.safe_load((REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8"))
             path = cache_path({"calibration": calibration, "model": model_cfg, "calibration_root": str(root)})
             tokens = np.arange(512, dtype=np.int64).reshape(2, 256)
@@ -98,8 +111,8 @@ class TestCalibrationData:
                 np.save(path, tokens[::-1].copy())
         return registry
 
-    def test_every_model_with_a_wanda_cell_needs_a_cache(self, preflight):
-        assert preflight._wanda_models() == ["gemma2_2b", "llama32_1b", "pythia160m", "pythia410m"]
+    def test_every_model_with_a_calibrated_cell_needs_a_cache(self, preflight):
+        assert preflight._calibrated_models() == ["gemma2_2b", "llama32_1b", "pythia160m", "pythia410m"]
 
     def test_absent_caches_block_and_name_the_models(self, preflight, tmp_path):
         label, ok, detail = preflight.check_calibration_data(tmp_path)
@@ -146,7 +159,7 @@ class TestCalibrationData:
         calibration = yaml.safe_load(
             (REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8")
         )
-        for model in preflight._wanda_models():
+        for model in preflight._calibrated_models():
             model_cfg = yaml.safe_load(
                 (REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8")
             )
@@ -241,8 +254,71 @@ def test_the_gate_is_still_shut_overall(preflight):
     """Whole-script verdict: science must not be clear to run yet."""
     pytest.importorskip("torch")
     results = [preflight.check_null_perturber(), *preflight.check_compressors(),
-               preflight.check_calibration_data(), preflight.check_chance_floor()]
+               preflight.check_calibration_data(), preflight.check_chance_floor(),
+               preflight.check_exit_gate()]
     assert not all(ok for _, ok, _ in results), (
         "the preflight gate reads clear; if that is intended, the remaining blockers in "
         "deploy/BLOCKERS.md should have been closed first"
     )
+
+
+class TestExitGate:
+    """B6 opens only on a pass record earned against the PI's reference file as it is now.
+
+    The old check grepped the test file for "skip", which it always contains, so B6 could
+    never have opened - a permanent false BLOCKED."""
+
+    REFERENCE: ClassVar[dict] = {"edges": ["a->b", "b->c"], "tolerance": 0.8, "source": "x", "decided_on": "2026-10-01"}
+
+    def _files(self, tmp_path, *, record=None, reference=None):
+        import hashlib
+        import json
+
+        ref = tmp_path / "ref.json"
+        ref.write_text(json.dumps(reference or self.REFERENCE), encoding="utf-8")
+        rec = tmp_path / "pass.json"
+        if record is not None:
+            record = {"reference_sha256": hashlib.sha256(ref.read_bytes()).hexdigest(), **record}
+            rec.write_text(json.dumps(record), encoding="utf-8")
+        return ref, rec
+
+    def test_no_reference_file_blocks_and_says_it_is_the_pis(self, preflight, tmp_path):
+        _, ok, detail = preflight.check_exit_gate(tmp_path / "absent.json", tmp_path / "pass.json")
+        assert ok is False and "PI" in detail and "tolerance" in detail
+
+    def test_a_reference_without_a_pass_blocks(self, preflight, tmp_path):
+        ref, rec = self._files(tmp_path)
+        _, ok, detail = preflight.check_exit_gate(ref, rec)
+        assert ok is False and "has not passed" in detail
+
+    def test_a_pass_on_the_current_reference_opens_it(self, preflight, tmp_path):
+        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.85, "date": "2026-10-02"})
+        _, ok, detail = preflight.check_exit_gate(ref, rec)
+        assert ok is True and "0.850 >= 0.8" in detail
+
+    def test_a_pass_on_an_edited_reference_blocks(self, preflight, tmp_path):
+        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.85})
+        ref.write_text(ref.read_text(encoding="utf-8").replace("0.8", "0.5"), encoding="utf-8")
+        _, ok, detail = preflight.check_exit_gate(ref, rec)
+        assert ok is False and "different reference" in detail
+
+    def test_a_record_below_the_tolerance_blocks(self, preflight, tmp_path):
+        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.5})
+        _, ok, detail = preflight.check_exit_gate(ref, rec)
+        assert ok is False and "below the tolerance" in detail
+
+    def test_a_malformed_record_blocks(self, preflight, tmp_path):
+        ref, rec = self._files(tmp_path, record={"passed": True})
+        _, ok, _ = preflight.check_exit_gate(ref, rec)
+        assert ok is False
+
+    def test_the_gate_and_the_preflight_agree_on_the_file_paths(self, preflight):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "_gate", REPO / "tests" / "test_regression_ioi_gpt2_small.py"
+        )
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        assert gate.REFERENCE_FILE == preflight.GATE_REFERENCE
+        assert gate.PASS_RECORD == preflight.GATE_PASS

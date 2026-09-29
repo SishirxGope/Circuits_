@@ -83,6 +83,43 @@ def _probe_model():
     return _TinyTransformerLens()
 
 
+def _probe_tl_model():
+    """A one-layer random HookedTransformer for the calibrated quantizers (GPTQ, AWQ).
+
+    They walk ``model.blocks`` and read ``model.cfg``, so the bare-parameter probe above
+    cannot exercise them: they would refuse it with TypeError, which ``_probe`` would score
+    as "real path entered" - a false OK. Llama-shaped (the architecture AWQ has rules for)
+    with 128 input channels, AWQ's published group size. Falls back to the sentinel where
+    TransformerLens is absent, which keeps both families BLOCKED - the safe direction.
+    """
+    try:
+        import warnings
+
+        import torch
+        from transformer_lens import HookedTransformer, HookedTransformerConfig
+
+        from src.extraction.real_model import enable_extraction_hooks
+    except Exception:  # noqa: BLE001 - no TransformerLens: stay conservative
+        return _NotAMockModel()
+    torch.manual_seed(0)
+    cfg = HookedTransformerConfig(
+        n_layers=1, d_model=128, n_ctx=8, d_head=32, n_heads=4, d_mlp=256, d_vocab=64,
+        act_fn="silu", normalization_type="RMS", gated_mlp=True, n_key_value_heads=2,
+        positional_embedding_type="rotary", rotary_dim=32,
+        original_architecture="LlamaForCausalLM", seed=0,
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return enable_extraction_hooks(HookedTransformer(cfg).eval())
+
+
+def _probe_tokens():
+    """Calibration tokens injected into the GPTQ/AWQ probe (the real cache is Q7's check)."""
+    import numpy as np
+
+    return np.random.default_rng(0).integers(0, 64, size=(4, 8))
+
+
 def _probe(fn, *args) -> tuple[bool, str]:
     """Call fn; return (implemented, detail).
 
@@ -151,12 +188,17 @@ def _probe_second_moments() -> dict:
     return out
 
 
-def _wanda_models() -> list[str]:
-    """Model config names that have a Wanda cell in any run queue."""
+CALIBRATED_FAMILIES = ("wanda", "gptq", "awq")
+
+
+def _calibrated_models() -> list[str]:
+    """Model config names with a Wanda, GPTQ or AWQ cell in any run queue."""
     models: set[str] = set()
     for queue in sorted((REPO / "deploy").glob("plan_*/cells_stage*.txt")):
         for line in queue.read_text(encoding="utf-8").splitlines():
-            if line.startswith("#") or "compression_family=wanda" not in line:
+            if line.startswith("#") or not any(
+                f"compression_family={family}" in line.split() for family in CALIBRATED_FAMILIES
+            ):
                 continue
             for token in line.split():
                 if token.startswith("model="):
@@ -170,7 +212,7 @@ FINGERPRINTS = Path(__file__).with_name("calibration_fingerprints.json")
 def check_calibration_data(
     root: Path | None = None, registry: dict | None = None
 ) -> tuple[str, bool, str]:
-    """Q7 - the calibration token caches Wanda (and later GPTQ/AWQ) read.
+    """Q7 - the calibration token caches Wanda, GPTQ and AWQ read.
 
     Data, not code: the fix is running the builder, which needs
     mode.allow_external_dataset_download. Each cache must exist, match its own sidecar
@@ -193,9 +235,9 @@ def check_calibration_data(
             json.loads(FINGERPRINTS.read_text(encoding="utf-8")) if FINGERPRINTS.exists() else {}
         )
     recorded = dict(registry.get("caches") or {})
-    models = _wanda_models()
+    models = _calibrated_models()
     if not models:
-        return label, False, "no Wanda cell found in any queue; cannot tell which caches are needed"
+        return label, False, "no calibrated cell found in any queue; cannot tell which caches are needed"
     calibration = yaml.safe_load((REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8"))
     missing, bad, unrecorded, differs = [], [], [], []
     for model in models:
@@ -237,10 +279,12 @@ def check_calibration_data(
 def check_compressors() -> list[tuple[str, bool, str]]:
     """B2 - the five compression families on real models."""
     out: list[tuple[str, bool, str]] = []
+    # GPTQ and AWQ calibrate on injected tokens and are handed a real HookedTransformer;
+    # like Wanda, whether the calibration DATA exists is check_calibration_data's job.
     families = [
         ("rtn", "RtnQuantizer", "src.compression.rtn", {"bits": 4}),
-        ("gptq", "GptqCompressor", "src.compression.gptq", {}),
-        ("awq", "AwqCompressor", "src.compression.awq", {}),
+        ("gptq", "GptqCompressor", "src.compression.gptq", {"bits": 4, "calibration": _probe_tokens()}),
+        ("awq", "AwqCompressor", "src.compression.awq", {"bits": 4, "calibration": _probe_tokens()}),
         ("magnitude", "MagnitudePruner", "src.compression.magnitude_prune", {}),
         # Wanda's CODE is probed with injected second moments; whether the calibration
         # DATA exists is a separate check (check_calibration_data), so a missing cache
@@ -259,8 +303,9 @@ def check_compressors() -> list[tuple[str, bool, str]]:
             continue
         # Both halves of the Compressor protocol: Stage C needs apply(), Stage B needs
         # weight_delta() for the null magnitudes. One without the other is not usable.
-        apply_ok, apply_detail = _probe(inst.apply, _probe_model(), None)
-        delta_ok, delta_detail = _probe(inst.weight_delta, _probe_model(), None)
+        make_model = _probe_tl_model if name in ("gptq", "awq") else _probe_model
+        apply_ok, apply_detail = _probe(inst.apply, make_model(), None)
+        delta_ok, delta_detail = _probe(inst.weight_delta, make_model(), None)
         if apply_ok and not delta_ok:
             out.append((label, False, f"apply() ok but weight_delta() {delta_detail}"))
         elif delta_ok and not apply_ok:
@@ -296,18 +341,45 @@ def check_normalized_l1() -> tuple[str, bool, str]:
     )
 
 
-def check_exit_gate() -> tuple[str, bool, str]:
-    """B6 - the GPT-2 IOI exit gate. Until it passes, no result counts."""
-    hits = list((REPO / "tests").glob("*exit_gate*")) + list((REPO / "tests").glob("*gpt2*"))
-    if not hits:
-        return "B6 GPT-2 IOI exit gate", False, "no exit-gate test file found in tests/"
-    text = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in hits)
-    skipped = "skip" in text.lower()
-    return (
-        "B6 GPT-2 IOI exit gate",
-        not skipped,
-        f"found {[p.name for p in hits]}" + (" but still skipped" if skipped else ""),
-    )
+GATE_REFERENCE = REPO / "data" / "reference" / "ioi_gpt2_small_edges.json"
+GATE_PASS = REPO / "data" / "reference" / "ioi_gpt2_small_gate_pass.json"
+
+
+def check_exit_gate(
+    reference: Path | None = None, record: Path | None = None
+) -> tuple[str, bool, str]:
+    """B6 - the GPT-2 IOI exit gate. Until it passes, no result counts.
+
+    Reads the record the gate writes when it passes
+    (tests/test_regression_ioi_gpt2_small.py) and checks it was earned against the PI's
+    reference file as it is NOW (sha256), at or above the PI's tolerance. The previous
+    check searched the test file for the word "skip", which the file always contains
+    (its skip condition is permanent code), so B6 could never have read OK.
+    """
+    import hashlib
+    import json
+
+    label = "B6 GPT-2 IOI exit gate"
+    reference = GATE_REFERENCE if reference is None else reference
+    record = GATE_PASS if record is None else record
+    if not reference.exists():
+        return label, False, (
+            "no PI reference file data/reference/ioi_gpt2_small_edges.json "
+            "(edges + tolerance, PI-owned; docs/HUMAN_DECISIONS.md Step 7)"
+        )
+    if not record.exists():
+        return label, False, "PI reference present, but the gate has not passed on it yet"
+    try:
+        result = json.loads(record.read_text(encoding="utf-8"))
+        tolerance = float(json.loads(reference.read_text(encoding="utf-8"))["tolerance"])
+        jaccard = float(result["jaccard"])
+    except Exception as exc:  # noqa: BLE001 - an unreadable record opens nothing
+        return label, False, f"cannot read the gate record: {type(exc).__name__}: {exc}"
+    if result.get("reference_sha256") != hashlib.sha256(reference.read_bytes()).hexdigest():
+        return label, False, "the gate passed on a different reference file; re-run it"
+    if result.get("passed") is not True or not jaccard >= tolerance:
+        return label, False, f"recorded Jaccard {jaccard:.3f} is below the tolerance {tolerance}"
+    return label, True, f"passed {result.get('date')}: Jaccard {jaccard:.3f} >= {tolerance}"
 
 
 def main() -> int:
@@ -329,8 +401,9 @@ def main() -> int:
 
     if blocked:
         print(f"REFUSING TO RUN SCIENCE: {len(blocked)} of {len(results)} blockers unimplemented.")
-        print("Each is an engineering gap or missing calibration data, not a configuration")
-        print("problem - deploy/BLOCKERS.md has the specification for each.")
+        print("Each is an engineering gap, missing calibration data, or a PI-owned input")
+        print("(B6's reference edges and tolerance) - not a configuration problem.")
+        print("deploy/BLOCKERS.md has the specification for each.")
         return 1
 
     print(f"All {len(results)} blockers implemented. Clear to run science.")

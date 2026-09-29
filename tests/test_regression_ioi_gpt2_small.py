@@ -1,4 +1,5 @@
 # [AI-GEN] agent=OpenCode date=2026-08-07 task=Phase-1 exit-gate regression test (IOI on GPT-2 small)
+# modified: [AI-GEN] agent=Claude date=2026-09-29 task=B6 - PI file carries edges AND tolerance; a pass leaves a record preflight can verify
 # reviewed-by: PENDING
 
 """Phase-1 exit gate (ARCHITECTURE.md §6): reproduce one published reference circuit
@@ -7,33 +8,49 @@ within tolerance before any real Stage A run is trusted.
 Gate contract:
 - Target: IOI circuit on GPT-2 small (Wang et al., ICLR 2023), pipeline A
   (attribution-patching graph) with a pinned checkpoint.
-- Tolerance: edge-set overlap vs the published reference edge list. Exact tolerance
-  value is PI-owned (AI_RULES.md 2.2 — no invented numbers); the reference edge list
-  must be provided by the PI as a JSON file and pinned (data/reference/).
+- Tolerance: edge-set overlap vs the published reference edge list. Both the edge list
+  and the tolerance are PI-owned (AI_RULES.md 2.2 - no invented numbers), and both live
+  in ONE file the PI writes and commits (``REFERENCE_FILE``)::
+
+      {"edges": ["<src>-><dst>", ...],   # our edge_id convention (ARCHITECTURE.md §2)
+       "tolerance": <Jaccard the gate must reach>,
+       "source": "<where the edge list comes from>",
+       "decided_on": "YYYY-MM-DD"}      # set BEFORE the first gate run
+
+  One file so the tolerance cannot drift from the edges it was chosen for.
 - The gate is a REGRESSION test, not a scientific claim: failing it blocks Stage A
   real extraction; passing it does not validate any compression claim.
 
 Execution state:
-- The overlap helper (edge_overlap) is pure and tested NOW.
-- The gate itself is SKIPPED until BOTH:
-  1. the environment variable RUN_IOI_GPT2_REFERENCE is set (human intent; the gate
-     needs pinned weights + upstream packages + a GPU), AND
-  2. the PI-provided reference edges file exists (no invented reference edges).
+- ``edge_overlap`` and the reference-file validation are pure and tested NOW.
+- The gate itself is SKIPPED until BOTH the environment variable
+  RUN_IOI_GPT2_REFERENCE is set (human intent: pinned weights, a GPU) AND the PI's
+  reference file exists. Then it FAILS, loudly, until GPT-2 extraction is wired
+  (``extract_gate_edges``) - it never reports an overlap it did not measure.
+- A pass writes ``PASS_RECORD``, which the preflight (deploy/shared/preflight_blockers.py,
+  check B6) verifies against the reference file's hash. That record - not the presence
+  of this file, and not the word "skip" in it - is what opens B6.
 """
 
+from __future__ import annotations
+
+import datetime
+import hashlib
 import json
 import os
+import subprocess
+from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
+REPO = Path(__file__).resolve().parents[1]
 REFERENCE_EDGES_ENV = "RUN_IOI_GPT2_REFERENCE"
-REFERENCE_EDGES_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "..", "data", "reference", "ioi_gpt2_small_edges.json"
-)
-
-# ⚠️ TODO [QUESTION FOR PI]: fixed tolerance (e.g. overlap >= 0.7) + exact reference
-# edge list + pinned GPT-2-small revision (HUMAN_DECISIONS.md Q5/Q6). Nothing here may
-# invent them (AI_RULES.md 2.2).
+# Was os.path.join(dirname(__file__), "..", "..", "data", ...) - one ".." too many, which
+# pointed OUTSIDE the repository, so a PI file placed in data/reference/ was never found.
+REFERENCE_FILE = REPO / "data" / "reference" / "ioi_gpt2_small_edges.json"
+PASS_RECORD = REPO / "data" / "reference" / "ioi_gpt2_small_gate_pass.json"
+REFERENCE_EDGES_FILE = str(REFERENCE_FILE)  # kept for callers of the old name
 
 
 def edge_overlap(extracted: set[str], reference: set[str]) -> float:
@@ -51,6 +68,71 @@ def edge_overlap(extracted: set[str], reference: set[str]) -> float:
     return len(extracted & reference) / len(union)
 
 
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def load_reference(path: Path = REFERENCE_FILE) -> tuple[set[str], float]:
+    """The PI's reference edges and tolerance, validated. Raises ValueError on any gap.
+
+    A bare list (the old format) is refused: it has no tolerance, and the gate may not
+    supply one (AI_RULES.md 2.2).
+    """
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):  # a malformed FILE, not a bad argument: ValueError
+        raise ValueError(  # noqa: TRY004
+            f"{path}: expected an object with 'edges' and 'tolerance'; a bare edge list "
+            "carries no tolerance and the gate may not invent one"
+        )
+    missing = [key for key in ("edges", "tolerance", "source", "decided_on") if key not in data]
+    if missing:
+        raise ValueError(f"{path}: missing {missing}")
+    edges = data["edges"]
+    if not isinstance(edges, list) or not edges or not all(isinstance(e, str) and "->" in e for e in edges):
+        raise ValueError(f"{path}: 'edges' must be a non-empty list of 'src->dst' strings")
+    if len(set(edges)) != len(edges):
+        raise ValueError(f"{path}: 'edges' contains duplicates")
+    tolerance = data["tolerance"]
+    if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not 0 < tolerance <= 1:
+        raise ValueError(f"{path}: 'tolerance' must be a Jaccard in (0, 1], got {tolerance!r}")
+    datetime.date.fromisoformat(str(data["decided_on"]))
+    return set(edges), float(tolerance)
+
+
+def extract_gate_edges() -> set[str]:
+    """Core edges of the dense IOI ensemble on GPT-2 small (Stage A, pinned revision).
+
+    Not wired yet. It needs configs/model/gpt2_small.yaml at the pinned revision
+    (``607a30d7...``, docs/HUMAN_DECISIONS.md) with its architecture VERIFIED, a Stage A
+    run in a mode that allows the download, and the core band of that run's freq.parquet.
+    Raising here keeps the gate from ever reporting an overlap it did not measure.
+    """
+    raise NotImplementedError(
+        "GPT-2 small extraction is not wired into the exit gate yet "
+        "(configs/model/gpt2_small.yaml + a Stage A run + its core edges)"
+    )
+
+
+def write_pass_record(overlap: float, tolerance: float, n_extracted: int, n_reference: int) -> None:
+    commit = subprocess.run(
+        ["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    ).stdout.strip() or None
+    PASS_RECORD.write_text(
+        json.dumps({
+            "passed": True,
+            "jaccard": overlap,
+            "tolerance": tolerance,
+            "reference_file": REFERENCE_FILE.relative_to(REPO).as_posix(),
+            "reference_sha256": file_sha256(REFERENCE_FILE),
+            "n_extracted_edges": n_extracted,
+            "n_reference_edges": n_reference,
+            "git_commit": commit,
+            "date": datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
+        }, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_edge_overlap_pure_logic():
     """The gate's tolerance math is testable without any model."""
     ref = {"L0.H1->L2.H3", "L2.H3->L5.MLP"}
@@ -61,6 +143,43 @@ def test_edge_overlap_pure_logic():
         edge_overlap({"a->b"}, set())
 
 
+class TestTheReferenceFile:
+    """The PI's file is validated before any model runs, so a malformed one fails fast."""
+
+    GOOD: ClassVar[dict] = {"edges": ["a->b", "b->c"], "tolerance": 0.5, "source": "x", "decided_on": "2026-10-01"}
+
+    def _write(self, tmp_path, data):
+        path = tmp_path / "ref.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    def test_a_complete_file_loads(self, tmp_path):
+        assert load_reference(self._write(tmp_path, self.GOOD)) == ({"a->b", "b->c"}, 0.5)
+
+    def test_a_bare_edge_list_is_refused_it_has_no_tolerance(self, tmp_path):
+        with pytest.raises(ValueError, match="tolerance"):
+            load_reference(self._write(tmp_path, ["a->b"]))
+
+    @pytest.mark.parametrize("key", ["edges", "tolerance", "source", "decided_on"])
+    def test_every_field_is_required(self, tmp_path, key):
+        data = {k: v for k, v in self.GOOD.items() if k != key}
+        with pytest.raises(ValueError, match=key):
+            load_reference(self._write(tmp_path, data))
+
+    @pytest.mark.parametrize("tolerance", [0, -0.1, 1.5, True, "0.7"])
+    def test_the_tolerance_must_be_a_jaccard(self, tmp_path, tolerance):
+        with pytest.raises(ValueError, match="tolerance"):
+            load_reference(self._write(tmp_path, {**self.GOOD, "tolerance": tolerance}))
+
+    @pytest.mark.parametrize("edges", [[], ["ab"], ["a->b", "a->b"], "a->b"])
+    def test_the_edges_must_be_distinct_src_dst_strings(self, tmp_path, edges):
+        with pytest.raises(ValueError, match="edges"):
+            load_reference(self._write(tmp_path, {**self.GOOD, "edges": edges}))
+
+    def test_the_reference_path_is_inside_the_repository(self):
+        assert REFERENCE_FILE.resolve().is_relative_to(REPO)
+
+
 @pytest.mark.skipif(
     not os.environ.get(REFERENCE_EDGES_ENV),
     reason=(
@@ -69,28 +188,22 @@ def test_edge_overlap_pure_logic():
         "DOWNLOAD approval)"
     ),
 )
-def test_ioi_gpt2_small_reference_gate(tmp_path):
+def test_ioi_gpt2_small_reference_gate():
     """THE gate: extracted IOI edges on GPT-2 small must overlap the published circuit.
 
-    Skipped unless RUN_IOI_GPT2_REFERENCE is set AND the reference edges file exists.
+    Skipped unless RUN_IOI_GPT2_REFERENCE is set AND the reference file exists.
     """
-    if not os.path.exists(REFERENCE_EDGES_FILE):
+    if not REFERENCE_FILE.exists():
         pytest.skip(
-            f"reference edges file missing: {REFERENCE_EDGES_FILE} "
-            "(PI must provide + pin it; HUMAN_DECISIONS.md Q6)"
+            f"reference file missing: {REFERENCE_FILE} "
+            "(PI must provide edges + tolerance and commit it; HUMAN_DECISIONS.md Step 7)"
         )
-
-    # Stage A engineering TODO: run pipeline A on GPT-2 small (pinned revision,
-    # dense reference ensemble), then build the extracted edge-ID set from the
-    # ensemble core edges. Placeholder below keeps the gate structurally honest
-    # until then (it is skipped in CI, never silently green).
-    with open(REFERENCE_EDGES_FILE, "r", encoding="utf-8") as f:
-        reference: set[str] = set(json.load(f))
-
-    extracted: set[str] = set()  # TODO(Stage A engineering): real extraction output
+    reference, tolerance = load_reference()
+    extracted = extract_gate_edges()
 
     overlap = edge_overlap(extracted, reference)
-    assert overlap >= 1.0, (
-        f"exit gate FAILED: extracted-vs-reference Jaccard {overlap:.3f} "
-        f"(expected >= 1.0; tolerance TBD by PI). Blocking real Stage A runs."
+    assert overlap >= tolerance, (
+        f"exit gate FAILED: extracted-vs-reference Jaccard {overlap:.3f} < PI tolerance "
+        f"{tolerance}. Blocking real Stage A runs."
     )
+    write_pass_record(overlap, tolerance, len(extracted), len(reference))

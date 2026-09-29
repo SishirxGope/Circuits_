@@ -296,36 +296,24 @@ class TestWeightDeltaFeedsTheNull:
         assert int4 > int8
 
 
-# Compressors with a reviewed real-model path are deliberately absent from this list:
-# asserting that they refuse real models would assert the opposite of the feature. Their
-# refusal contracts are tested below and their real-model behaviour in dedicated modules
-# (tests/test_rtn_real_model.py, tests/test_magnitude_torch.py). A compressor moves off
-# this list only when its real path lands.
+# Each compressor's real-model path, and where its behaviour is tested. (This used to be
+# a list of compressors still refusing real models; it emptied on 2026-09-29.)
 #   rtn        - real path landed 2026-09-27 (deploy/BLOCKERS.md B2)
 #   magnitude  - real path landed 2026-09-27
 #   wanda      - real path landed 2026-09-29 (tests/test_wanda_torch.py); its DATA, the
 #                Q7 calibration cache, is gated separately (preflight "Q7 calibration caches")
-#   gptq/awq   - still blocked: no real-model path yet
-_UNIMPLEMENTED = [GptqCompressor(), AwqCompressor()]
-_UNIMPLEMENTED_IDS = ["gptq", "awq"]
-_IMPLEMENTED = [RtnQuantizer(), MagnitudePruner(), WandaPruner()]
-_IMPLEMENTED_IDS = ["rtn", "magnitude", "wanda"]
+#   gptq/awq   - real paths landed 2026-09-29 (tests/test_gptq_awq_torch.py); same Q7 data
+_IMPLEMENTED = [RtnQuantizer(), GptqCompressor(), AwqCompressor(), MagnitudePruner(), WandaPruner()]
+_IMPLEMENTED_IDS = ["rtn", "gptq", "awq", "magnitude", "wanda"]
 
 
 class TestRealModelsAreStillRefused:
-    """A compressor with no reviewed real-model path must fail loudly, never silently
-    no-op: a silent pass-through would report zero weight delta, and the matched-magnitude
-    null would then match zero magnitude and make every circuit look perfectly stable."""
+    """A compressor must fail loudly on a model it cannot handle, never silently no-op: a
+    silent pass-through would report zero weight delta, and the matched-magnitude null
+    would then match zero magnitude and make every circuit look perfectly stable.
 
-    @pytest.mark.parametrize("compressor", _UNIMPLEMENTED, ids=_UNIMPLEMENTED_IDS)
-    def test_apply_refuses_non_mock_models(self, compressor):
-        with pytest.raises(NotImplementedError, match="Stage C approval"):
-            compressor.apply(object(), {})
-
-    @pytest.mark.parametrize("compressor", _UNIMPLEMENTED, ids=_UNIMPLEMENTED_IDS)
-    def test_weight_delta_refuses_non_mock_models(self, compressor):
-        with pytest.raises(NotImplementedError, match="Stage C approval"):
-            compressor.weight_delta(object(), {})
+    All five families have a real path since 2026-09-29 (GPTQ and AWQ last), so what
+    remains to check is that each still refuses a type it does not know."""
 
     @pytest.mark.parametrize("method", ["apply", "weight_delta"])
     @pytest.mark.parametrize("compressor", _IMPLEMENTED, ids=_IMPLEMENTED_IDS)

@@ -32,6 +32,16 @@ REQUIRED = {
     # IOI file is itself an edit of Easy-Transformer. Both are MIT.
     "automatic-circuit-discovery-LICENSE.txt": "Arthur Conmy",
     "easy-transformer-LICENSE.txt": "neelnanda-io",
+    # 2026-09-29: src/compression/awq.py ports llm-awq's quantizer, clip and scale search.
+    "llm-awq-LICENSE.txt": "MIT HAN Lab",
+}
+
+# Non-MIT upstreams: filename -> a phrase that identifies the licence text.
+# 2026-09-29: src/compression/gptq.py ports IST-DASLab/gptq, which is Apache-2.0. Apache
+# 4(a) requires the licence to accompany a derivative work (there is no MIT-style
+# permission sentence to check, and upstream ships the unfilled copyright template).
+REQUIRED_APACHE = {
+    "gptq-LICENSE.txt": "Apache License",
 }
 
 
@@ -56,6 +66,14 @@ class TestUpstreamLicencesAreShipped:
         text = (LICENCES / filename).read_text(encoding="utf-8", errors="replace")
         assert "Permission is hereby granted" in text
         assert "WITHOUT WARRANTY OF ANY KIND" in text.upper()
+
+    @pytest.mark.parametrize("filename,phrase", sorted(REQUIRED_APACHE.items()))
+    def test_each_apache_licence_is_the_full_text(self, filename, phrase):
+        path = LICENCES / filename
+        assert path.is_file(), f"{filename} is missing from THIRD_PARTY_LICENSES/"
+        text = path.read_text(encoding="utf-8", errors="replace")
+        assert phrase in text and "Version 2.0" in text
+        assert "TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION" in text
 
     def test_the_provenance_readme_exists(self):
         assert (LICENCES / "README.md").is_file(), (
@@ -100,7 +118,7 @@ class TestTheLicencesAreActuallyTrackedByGit:
         if self._git("rev-parse", "--git-dir").returncode != 0:
             pytest.skip("not a git working tree (source distribution?)")
 
-    @pytest.mark.parametrize("filename", sorted(REQUIRED) + ["README.md"])
+    @pytest.mark.parametrize("filename", sorted(REQUIRED) + sorted(REQUIRED_APACHE) + ["README.md"])
     def test_each_file_is_tracked(self, filename):
         rel = f"THIRD_PARTY_LICENSES/{filename}"
         tracked = self._git("ls-files", "--error-unmatch", rel).returncode == 0

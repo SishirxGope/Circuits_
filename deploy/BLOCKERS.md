@@ -1,6 +1,6 @@
 # BLOCKERS — what must be implemented before any of these scripts can produce science
 
-**Verified by running `python deploy/shared/preflight_blockers.py` on 2026-09-21.**
+**Verified by running `python deploy/shared/preflight_blockers.py` (last: 2026-09-29, Windows).**
 That script is the authority, not this document. Re-run it whenever you want the truth.
 
 Every stage runner in this repository works today — **on the mock model.** Hand any of them
@@ -8,9 +8,11 @@ a real model and it raises `NotImplementedError`. The deployment scripts in
 `plan_a_local_pc/` and `plan_b_dgx_spark/` therefore call the preflight first and refuse to
 start, rather than failing four hours into a queue at night.
 
-Current state on the Spark: **3 of 10 checks blocked** (was 8 of 9 on 2026-09-21). The
-tenth check, Q7 calibration caches, was added 2026-09-29 and is data, not code: it reads
-OK only on a machine holding caches that match `deploy/shared/calibration_fingerprints.json`.
+Current state (2026-09-29): **all engineering is done except B6's extraction wiring.** On
+the Spark, once this code is pulled, the expected result is **1 of 10 blocked: B6**, which
+waits on a PI input (reference edges + tolerance), not on code alone. On a machine without
+the calibration caches Q7 also reads BLOCKED: it is data, and reads OK only where the caches
+match `deploy/shared/calibration_fingerprints.json`.
 
 Run `python deploy/shared/preflight_blockers.py` for the live status; this table is a
 summary and can drift.
@@ -20,13 +22,13 @@ summary and can drift.
 | B1 | Matched-magnitude null on real models | **DONE** — `matched_magnitude.py` delegates to `compression/torch_weights.py`; PI-approved 2026-09-27 | 🔒 novelty |
 | B2 | RTN compressor | **DONE** — `rtn.py::rtn_quantize_torch`, per-output-channel, 2026-09-27 | engineering |
 | B2 | Magnitude pruner | **DONE** — `magnitude_prune.py::prune_magnitude_torch`, 2026-09-27 | engineering |
-| B2 | GPTQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
-| B2 | AWQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
+| B2 | GPTQ compressor | **DONE** — `gptq.py`, port of IST-DASLab/gptq @ `2d65066e`, agrees with its `fasterquant`, 2026-09-29 | engineering |
+| B2 | AWQ compressor | **DONE** — `awq.py`, port of mit-han-lab/llm-awq @ `d6e797a4`, agrees with its quantizer, clip and scale search, 2026-09-29 | engineering |
 | B2 | Wanda pruner | **DONE** (code) — `magnitude_prune.py::prune_wanda_torch`, masks identical to upstream's own function, 2026-09-29 | engineering |
-| Q7 | Calibration caches | **DONE on the Spark** 2026-09-29 — fineweb-edu @ `87f09149…`, fingerprints recorded in `deploy/shared/calibration_fingerprints.json` | data |
+| Q7 | Calibration caches (Wanda, GPTQ, AWQ) | **DONE on the Spark** 2026-09-29 — fineweb-edu @ `87f09149…`, fingerprints recorded in `deploy/shared/calibration_fingerprints.json` | data |
 | B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
-| B6 | GPT-2 IOI exit gate | BLOCKED (test exists, skipped) — needs a PI-supplied reference edge list + tolerance | engineering |
+| B6 | GPT-2 IOI exit gate | BLOCKED — needs **your** reference edges + tolerance (`data/reference/ioi_gpt2_small_edges.json`), then GPT-2 extraction wiring | PI input + engineering |
 
 **Wanda is unblocked on the Spark: code and data.** The four caches were built 2026-09-29
 (fineweb-edu `sample-10BT` @ `87f09149ef4734204d70ed1d046ddc9ca3f2b8f9`, 300k tokens,
@@ -41,8 +43,31 @@ came out byte-identical, so the seeded streaming shuffle is deterministic at a f
 dataset commit. The first Wanda cell collects E[x^2] once per model and every later cell,
 in either stage, reuses the same file.
 
-GPTQ and AWQ will calibrate on the same cache, but they still need code, and GPTQ needs more
-than Wanda's statistic: the full input Hessian X^T X per layer, not just its diagonal.
+**GPTQ and AWQ are unblocked on the Spark: code and data.** Both are torch ports of the
+authors' reference code at pinned commits (no `auto-gptq`/`autoawq`, which do not build on
+aarch64), calibrated on the same Q7 cache as Wanda, forward in bf16 as Q7 pre-registers.
+`tests/test_gptq_awq_torch.py` runs verbatim excerpts of the reference code
+(`tests/reference_gptq.py`, `tests/reference_awq.py`) beside the ports and requires them to
+agree. The grid pre-registers only `bits: 4`; every other setting is the reference's own:
+
+- **GPTQ** (`llama.py` run without flags): per-row, asymmetric, min-max grid, no groups,
+  no act-order, blocksize 128, percdamp 0.01; layers in order, each calibrated on the
+  output of the already-quantized layers before it.
+- **AWQ** (README / paper INT4 setting): zero-point, groups of 128 input channels, 20-point
+  scale search, clipping searched on 512 sampled tokens and skipped for Q and K (and for V
+  on Pythia, whose fused QKV the reference skips by name). Scaling groups follow the
+  reference per architecture; the V -> O group never applies to our four models (GQA, or
+  GPT-NeoX). Scales are folded into the quantized projections themselves, so - as for every
+  family - only projection matrices change and the null is matched to that same set.
+
+**Note the two methods do not share a grid**: GPTQ quantizes per row, AWQ per group of 128.
+That is each method as published; a common grid would be a pre-registration change.
+
+Each cell's compressed weights are computed once per model and cached under
+`calibration_cache/compressed/`, so Stage B's `weight_delta` and Stage C's `apply` read the
+same compression. Budget disk for it: one copy of the projection weights per method per
+model, float32 - roughly 8 GB each for Gemma-2-2B, 4 GB for Llama-3.2-1B, 1-2 GB for the
+Pythias. The first GPTQ/AWQ cell of each model does the computation; later cells reuse it.
 
 **The collector does not read `ln1/ln2.hook_normalized`.** TransformerLens fires that hook
 *before* the norm's affine `* w + b`, so it equals the projection input only for untrained
@@ -114,7 +139,8 @@ Build order, easiest first:
    (arXiv:2306.11695) and upstream's notebook compare within each output row instead; the
    revision is what produced the results C5 correlates against, so we follow it and report
    the deviation from the paper.
-4. **GPTQ**, 5. **AWQ** — see the dependency warning below.
+4. **GPTQ**, 5. **AWQ** — DONE 2026-09-29, ported in torch (see the note below and the
+   settings above).
 
 > **Magnitude and Wanda are torch reimplementations of `saediag.pruning`**, not wrappers:
 > TransformerLens has no `nn.Linear` modules for upstream's functions to act on. The fork is
@@ -150,11 +176,38 @@ structurally possible pairs. Replace the computation in `run_stage_c.py` and fli
 
 ## B6 — GPT-2 IOI exit gate
 
-**File:** `tests/test_regression_ioi_gpt2_small.py` (exists, `skipif`-gated).
+**File:** `tests/test_regression_ioi_gpt2_small.py`.
 
-Until this passes, **no result counts.** It extracts the IOI circuit from GPT-2 small and
-checks it recovers the published heads — validating the extraction stack against a known
+Until it passes, **no result counts.** It extracts the IOI circuit from GPT-2 small and
+checks it recovers the published circuit - validating the extraction stack against a known
 reference. Without it, a null result is indistinguishable from a broken extractor.
+
+**What opens B6 (changed 2026-09-29).** The preflight used to search the test file for the
+word "skip", which the file always contains, so B6 could never have read OK. It now reads
+the record the gate writes when it passes (`data/reference/ioi_gpt2_small_gate_pass.json`)
+and checks it against the reference file's current sha256 and your tolerance.
+
+**What it needs, in order:**
+
+1. **From you (PI-owned, AI_RULES 2.2):** `data/reference/ioi_gpt2_small_edges.json`,
+   committed, with the edges AND the tolerance in one file so neither can drift from the
+   other. Set the tolerance before you see a number (HUMAN_DECISIONS.md Step 7):
+
+       {"edges": ["<src>-><dst>", ...],   // our edge_id convention (ARCHITECTURE.md §2)
+        "tolerance": 0.xx,                // Jaccard the gate must reach
+        "source": "Wang et al. 2023, ... (how the edges were derived)",
+        "decided_on": "YYYY-MM-DD"}
+
+   The gate refuses a bare edge list, since that has no tolerance.
+2. **Engineering:** `extract_gate_edges()` in the test - a `configs/model/gpt2_small.yaml`
+   at the recorded pin (`607a30d7…`) with its architecture verified, a Stage A run of the
+   dense IOI ensemble, and that run's core-band edges. Until then the gate raises rather
+   than report an overlap it never measured.
+3. **Then:** `RUN_IOI_GPT2_REFERENCE=1 python -m pytest tests/test_regression_ioi_gpt2_small.py`
+   on the Spark; a pass writes the record and B6 opens.
+
+Fixed on the way: the test looked for the reference file one directory *above* the repo,
+so a file placed in `data/reference/` would never have been found.
 
 Note the caveat in `CLAUDE.md` §6: published reference circuits exist for GPT-2 small, **not**
 for Pythia, Gemma or Llama. The gate is a sanity check on the stack, not a claim about those
