@@ -8,8 +8,9 @@ a real model and it raises `NotImplementedError`. The deployment scripts in
 `plan_a_local_pc/` and `plan_b_dgx_spark/` therefore call the preflight first and refuse to
 start, rather than failing four hours into a queue at night.
 
-Current state: **4 of 10 checks blocked** (was 8 of 9 on 2026-09-21). The tenth check,
-Q7 calibration caches, was added 2026-09-29: it is missing *data*, not missing code.
+Current state on the Spark: **3 of 10 checks blocked** (was 8 of 9 on 2026-09-21). The
+tenth check, Q7 calibration caches, was added 2026-09-29 and is data, not code: it reads
+OK only on a machine holding caches that match `deploy/shared/calibration_fingerprints.json`.
 
 Run `python deploy/shared/preflight_blockers.py` for the live status; this table is a
 summary and can drift.
@@ -22,21 +23,23 @@ summary and can drift.
 | B2 | GPTQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
 | B2 | AWQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
 | B2 | Wanda pruner | **DONE** (code) — `magnitude_prune.py::prune_wanda_torch`, masks identical to upstream's own function, 2026-09-29 | engineering |
-| Q7 | Calibration caches | BLOCKED — not built; `experiments/build_calibration_cache.py`, needs `allow_external_dataset_download` | data |
+| Q7 | Calibration caches | **DONE on the Spark** 2026-09-29 — fineweb-edu @ `87f09149…`, fingerprints recorded in `deploy/shared/calibration_fingerprints.json` | data |
 | B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
 | B6 | GPT-2 IOI exit gate | BLOCKED (test exists, skipped) — needs a PI-supplied reference edge list + tolerance | engineering |
 
-**Wanda is waiting on data, not code.** Its real path, the token-cache builder and the
-E[x^2] collector all exist and are tested (`src/calibration/`). What is missing is the cache
-itself: fineweb-edu, 300k tokens, **seed 7**, bf16 forward (`configs/calibration/final.yaml`),
-one per tokenizer, built on the Spark with
+**Wanda is unblocked on the Spark: code and data.** The four caches were built 2026-09-29
+(fineweb-edu `sample-10BT` @ `87f09149ef4734204d70ed1d046ddc9ca3f2b8f9`, 300k tokens,
+**seed 7**, 1,171 x 256 windows each) with
 
     python experiments/build_calibration_cache.py mode=scientific_run model=<name>
 
-for each of `pythia160m pythia410m gemma2_2b llama32_1b`. That needs
-`mode.allow_external_dataset_download`. The first Wanda cell then collects E[x^2] once per
-model and every later cell, in either stage, reuses the same file.
+Their fingerprints are tracked in `deploy/shared/calibration_fingerprints.json`, and preflight
+blocks any cache that differs from that record - including a rebuild whose own sidecar is
+self-consistent. Pythia-160m and -410m share a tokenizer and their two independent builds
+came out byte-identical, so the seeded streaming shuffle is deterministic at a fixed
+dataset commit. The first Wanda cell collects E[x^2] once per model and every later cell,
+in either stage, reuses the same file.
 
 GPTQ and AWQ will calibrate on the same cache, but they still need code, and GPTQ needs more
 than Wanda's statistic: the full input Hessian X^T X per layer, not just its diagonal.

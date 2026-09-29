@@ -164,12 +164,20 @@ def _wanda_models() -> list[str]:
     return sorted(models)
 
 
-def check_calibration_data(root: Path | None = None) -> tuple[str, bool, str]:
+FINGERPRINTS = Path(__file__).with_name("calibration_fingerprints.json")
+
+
+def check_calibration_data(
+    root: Path | None = None, registry: dict | None = None
+) -> tuple[str, bool, str]:
     """Q7 - the calibration token caches Wanda (and later GPTQ/AWQ) read.
 
     Data, not code: the fix is running the builder, which needs
-    mode.allow_external_dataset_download. Each cache must exist AND match the fingerprint
-    recorded when it was built, or a queue could run on a truncated or altered set.
+    mode.allow_external_dataset_download. Each cache must exist, match its own sidecar
+    (not altered since it was built), AND match the tracked record in
+    calibration_fingerprints.json (the same tokens as the original build). The sidecar
+    alone cannot catch a rebuild that came out different - e.g. from a newer dataset
+    commit - because the rebuild writes a fresh sidecar that matches itself.
     """
     label = "Q7 calibration caches"
     try:
@@ -178,11 +186,18 @@ def check_calibration_data(root: Path | None = None) -> tuple[str, bool, str]:
         from src.calibration.token_cache import cache_path, load_token_cache
     except Exception as exc:  # noqa: BLE001
         return label, False, f"import failed: {exc}"
+    if registry is None:
+        import json
+
+        registry = (
+            json.loads(FINGERPRINTS.read_text(encoding="utf-8")) if FINGERPRINTS.exists() else {}
+        )
+    recorded = dict(registry.get("caches") or {})
     models = _wanda_models()
     if not models:
         return label, False, "no Wanda cell found in any queue; cannot tell which caches are needed"
     calibration = yaml.safe_load((REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8"))
-    missing, bad = [], []
+    missing, bad, unrecorded, differs = [], [], [], []
     for model in models:
         model_cfg = yaml.safe_load((REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8"))
         resolved = {"calibration": calibration, "model": model_cfg}
@@ -194,9 +209,14 @@ def check_calibration_data(root: Path | None = None) -> tuple[str, bool, str]:
             missing.append(model)
             continue
         try:
-            load_token_cache(path)
+            _, meta = load_token_cache(path)
         except Exception as exc:  # noqa: BLE001 - any failure means the cache is unusable
             bad.append(f"{model} ({type(exc).__name__})")
+            continue
+        if path.name not in recorded:
+            unrecorded.append(model)
+        elif meta.get("fingerprint") != recorded[path.name].get("fingerprint"):
+            differs.append(model)
     if missing or bad:
         parts = []
         if missing:
@@ -204,7 +224,14 @@ def check_calibration_data(root: Path | None = None) -> tuple[str, bool, str]:
         if bad:
             parts.append(f"failed verification: {bad}")
         return label, False, "; ".join(parts) + " - needs allow_external_dataset_download"
-    return label, True, f"present and fingerprint-verified for {len(models)} models"
+    if unrecorded or differs:
+        parts = []
+        if differs:
+            parts.append(f"differs from the recorded build for {differs}")
+        if unrecorded:
+            parts.append(f"no recorded fingerprint for {unrecorded}")
+        return label, False, "; ".join(parts) + f" ({FINGERPRINTS.name})"
+    return label, True, f"present and matching the recorded fingerprints for {len(models)} models"
 
 
 def check_compressors() -> list[tuple[str, bool, str]]:

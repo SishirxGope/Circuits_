@@ -1,0 +1,34 @@
+{
+  "_what": "The Q7 calibration caches as first built. Preflight blocks any cache whose fingerprint differs from this record, so every machine calibrates on the same tokens. Change an entry only by deliberately rebuilding and recording why.",
+  "built": "2026-09-29",
+  "built_on": "DGX Spark (spark-ef6f)",
+  "builder": "experiments/build_calibration_cache.py mode=scientific_run model=<name>",
+  "dataset": "HuggingFaceFW/fineweb-edu",
+  "dataset_config": "sample-10BT",
+  "dataset_revision": "87f09149ef4734204d70ed1d046ddc9ca3f2b8f9",
+  "shuffle_seed": 7,
+  "context_len": 256,
+  "note_pythia": "pythia-160m and pythia-410m share the GPT-NeoX tokenizer, and their two independent builds produced byte-identical caches: evidence that the seeded streaming shuffle is deterministic at a fixed dataset revision.",
+  "caches": {
+    "EleutherAI_pythia-160m_calib_300000_7.npy": {
+      "fingerprint": "29f1657fe34dfac3322affc4936bafa4bd432329568b528dcd088a8905b3f52d",
+      "shape": [1171, 256],
+      "tokenizer_revision": "50f5173d932e8e61f858120bcb800b97af589f46"
+    },
+    "EleutherAI_pythia-410m_calib_300000_7.npy": {
+      "fingerprint": "29f1657fe34dfac3322affc4936bafa4bd432329568b528dcd088a8905b3f52d",
+      "shape": [1171, 256],
+      "tokenizer_revision": "9879c9b5f8bea9051dcb0e68dff21493d67e9d4f"
+    },
+    "google_gemma-2-2b_calib_300000_7.npy": {
+      "fingerprint": "63c923dab1d0efeebe738a88623e933af0f7f20ae616fda870ce7ff720162c74",
+      "shape": [1171, 256],
+      "tokenizer_revision": "c5ebcd40d208330abc697524c919956e692655cf"
+    },
+    "meta-llama_Llama-3.2-1B_calib_300000_7.npy": {
+      "fingerprint": "d15b564f9077c72ab8e65b0b291434347cb6715624a84ced6a06a98a5c1685d8",
+      "shape": [1171, 256],
+      "tokenizer_revision": "4e20de362430cd3b72f300e6b0f18e50e7166e08"
+    }
+  }
+}

@@ -80,19 +80,23 @@ class TestCalibrationData:
     stub, and so building the cache - not engineering - is what opens it."""
 
     def _write_caches(self, preflight, root, *, tamper=None):
+        """Synthetic caches under the real filenames; returns a record of them."""
         import numpy as np
         import yaml
 
-        from src.calibration.token_cache import cache_path, save_token_cache
+        from src.calibration.token_cache import cache_path, fingerprint, save_token_cache
 
+        registry = {"caches": {}}
         calibration = yaml.safe_load((REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8"))
         for model in preflight._wanda_models():
             model_cfg = yaml.safe_load((REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8"))
             path = cache_path({"calibration": calibration, "model": model_cfg, "calibration_root": str(root)})
             tokens = np.arange(512, dtype=np.int64).reshape(2, 256)
             save_token_cache(path, tokens, {})
+            registry["caches"][path.name] = {"fingerprint": fingerprint(tokens)}
             if model == tamper:
                 np.save(path, tokens[::-1].copy())
+        return registry
 
     def test_every_model_with_a_wanda_cell_needs_a_cache(self, preflight):
         assert preflight._wanda_models() == ["gemma2_2b", "llama32_1b", "pythia160m", "pythia410m"]
@@ -103,16 +107,54 @@ class TestCalibrationData:
         assert "not built for" in detail and "gemma2_2b" in detail
         assert "allow_external_dataset_download" in detail
 
-    def test_verified_caches_open_it(self, preflight, tmp_path):
-        self._write_caches(preflight, tmp_path)
-        _, ok, detail = preflight.check_calibration_data(tmp_path)
+    def test_recorded_caches_open_it(self, preflight, tmp_path):
+        registry = self._write_caches(preflight, tmp_path)
+        _, ok, detail = preflight.check_calibration_data(tmp_path, registry)
         assert ok is True, detail
-        assert "fingerprint-verified for 4 models" in detail
+        assert "matching the recorded fingerprints for 4 models" in detail
 
     def test_an_altered_cache_blocks(self, preflight, tmp_path):
-        self._write_caches(preflight, tmp_path, tamper="llama32_1b")
-        _, ok, detail = preflight.check_calibration_data(tmp_path)
+        registry = self._write_caches(preflight, tmp_path, tamper="llama32_1b")
+        _, ok, detail = preflight.check_calibration_data(tmp_path, registry)
         assert ok is False and "failed verification" in detail and "llama32_1b" in detail
+
+    def test_a_self_consistent_rebuild_that_differs_from_the_record_blocks(
+        self, preflight, tmp_path
+    ):
+        """The case the sidecar cannot catch: a rebuild writes a sidecar matching itself."""
+        registry = self._write_caches(preflight, tmp_path)
+        name = next(n for n in registry["caches"] if n.startswith("google_gemma"))
+        registry["caches"][name] = {"fingerprint": "0" * 64}
+        _, ok, detail = preflight.check_calibration_data(tmp_path, registry)
+        assert ok is False
+        assert "differs from the recorded build" in detail and "gemma2_2b" in detail
+
+    def test_a_cache_missing_from_the_record_blocks(self, preflight, tmp_path):
+        registry = self._write_caches(preflight, tmp_path)
+        registry["caches"] = {n: v for n, v in registry["caches"].items() if "Llama" not in n}
+        _, ok, detail = preflight.check_calibration_data(tmp_path, registry)
+        assert ok is False and "no recorded fingerprint" in detail and "llama32_1b" in detail
+
+    def test_the_tracked_record_covers_every_model_that_needs_a_cache(self, preflight):
+        import json
+
+        import yaml
+
+        from src.calibration.token_cache import cache_path
+
+        record = json.loads(preflight.FINGERPRINTS.read_text(encoding="utf-8"))
+        calibration = yaml.safe_load(
+            (REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8")
+        )
+        for model in preflight._wanda_models():
+            model_cfg = yaml.safe_load(
+                (REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8")
+            )
+            name = cache_path({"calibration": calibration, "model": model_cfg}).name
+            entry = record["caches"][name]
+            assert len(entry["fingerprint"]) == 64, model
+            assert entry["tokenizer_revision"] == model_cfg["hf_revision"], model
+            assert entry["shape"] == [300_000 // 256, 256], model
 
 
 def test_an_implemented_family_reads_ok_by_succeeding_not_by_erroring(preflight):
