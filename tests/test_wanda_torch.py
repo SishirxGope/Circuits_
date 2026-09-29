@@ -12,6 +12,7 @@ machine without the fork rather than pass vacuously.
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 from pathlib import Path
 
@@ -82,8 +83,14 @@ def _as_hf_linear(name, weight, s2):
 
 
 class TestMasksAreUpstreams:
+    """Algorithm equivalence, so both sides run on the CPU: on a CUDA machine the tiny
+    models land on the GPU (TransformerLens's default), and a cross-device comparison
+    would mix the algorithm question with a numerics one. The GPU is covered separately
+    by ``TestTheDevice``."""
+
     @pytest.mark.parametrize("sparsity", LEVELS)
     def test_identical_to_prune_wanda_style_inplace(self, model, upstream, sparsity):
+        model = copy.deepcopy(model).to("cpu")
         s2 = _moments(model)
         ours = dict(prune_wanda_torch(model, s2, sparsity).named_parameters())
         dense = dict(model.named_parameters())
@@ -102,7 +109,7 @@ class TestMasksAreUpstreams:
         anything, and a wrong statistic must change upstream's mask."""
         s2 = _moments(model)
         name = "blocks.0.attn.W_O"
-        weight = dict(model.named_parameters())[name].detach()
+        weight = dict(model.named_parameters())[name].detach().cpu()
         hf_weight, ex2, back = _as_hf_linear(name, weight, s2[name])
         assert hf_weight.shape != weight.shape
         masks = []
@@ -114,6 +121,27 @@ class TestMasksAreUpstreams:
             upstream.prune_wanda_style_inplace(holder, {"proj": stat.numpy()}, 0.4)
             masks.append(back(holder.proj.weight.detach() != 0))
         assert not torch.equal(masks[0], masks[1])
+
+
+class TestTheDevice:
+    """On the Spark the models run on CUDA. The masks there must be the masks upstream's
+    function was verified against on the CPU, or Wanda cells would prune differently by
+    machine. Skipped where there is no GPU."""
+
+    @pytest.mark.parametrize("sparsity", LEVELS)
+    def test_gpu_masks_equal_cpu_masks(self, model, sparsity):
+        if next(model.parameters()).device.type != "cuda":
+            pytest.skip("model is not on a GPU on this machine")
+        s2 = _moments(model)
+        on_gpu = dict(prune_wanda_torch(model, s2, sparsity).named_parameters())
+        on_cpu = dict(prune_wanda_torch(copy.deepcopy(model).to("cpu"), s2, sparsity).named_parameters())
+        for name in projection_parameters(model):
+            gpu_mask = (on_gpu[name].detach() != 0).cpu()
+            cpu_mask = on_cpu[name].detach() != 0
+            assert torch.equal(gpu_mask, cpu_mask), (
+                f"{name} at {sparsity}: {int((gpu_mask != cpu_mask).sum())} of "
+                f"{gpu_mask.numel()} entries differ between GPU and CPU"
+            )
 
 
 class TestTheRule:

@@ -143,7 +143,7 @@ class TestTheInputIsWhatTheProjectionConsumes:
         for pname in projection_parameters(model):
             _, keep = input_source_for(pname)
             x = _true_input(model, cache, pname).to(torch.float64)
-            want = (x * x).mean(dim=tuple(range(x.ndim - keep))).numpy()
+            want = (x * x).mean(dim=tuple(range(x.ndim - keep))).cpu().numpy()
             np.testing.assert_allclose(stats[pname].reshape(want.shape), want, rtol=1e-5, err_msg=pname)
 
     def test_split_qkv_input_repeats_identical_copies(self, model, tokens):
@@ -167,7 +167,7 @@ class TestTheTrap:
     def test_the_statistic_is_not_the_pre_affine_one(self, model, tokens):
         stats = collect_second_moments(model, tokens)
         x = _cache(model, tokens)["blocks.0.ln2.hook_normalized"].to(torch.float64)
-        pre_affine = (x * x).mean(dim=tuple(range(x.ndim - 1))).numpy()
+        pre_affine = (x * x).mean(dim=tuple(range(x.ndim - 1))).cpu().numpy()
         assert not np.allclose(stats["blocks.0.mlp.W_in"].ravel(), pre_affine, rtol=1e-3)
 
 
