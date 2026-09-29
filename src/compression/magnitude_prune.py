@@ -399,6 +399,69 @@ def achieved_sparsity_torch(
     return out
 
 
+def prune_wanda_torch(
+    model: Any,
+    second_moments: Mapping[str, Any],
+    target_sparsity: float,
+    names: Sequence[str] | None = None,
+) -> Any:
+    """Per-matrix Wanda on a torch model; returns a pruned COPY.
+
+    Upstream's arithmetic exactly (saediag.pruning.prune_wanda_style_inplace):
+    ``metric = |W| * sqrt(E[x^2] + 1e-12)`` in float32, ``k = int(numel * sparsity)``,
+    threshold at ``kthvalue(metric, min(k, numel - 1))``, keep ``metric > threshold``.
+
+    **Per matrix, not per output row.** Sun et al. 2023 compare weights within each
+    output row; upstream's revision - the code behind the results C5 correlates against -
+    thresholds each matrix as a whole and says so ("per-matrix scores", reprune.py). The
+    upstream notebook does per-row, but it is not what produced those results. This
+    follows the revision, and the deviation from the Wanda paper is reportable.
+
+    For Gemma-2 and Llama-3.2 each TransformerLens projection is one HF ``nn.Linear``
+    (q/k/v/o, gate/up/down), and the TL layout is a reshape of it, so per-matrix
+    thresholds select the same weights. Pythia's HF checkpoint fuses Q, K and V into one
+    Linear that TL splits; upstream has no Pythia results, and thresholding each
+    projection separately keeps the rule identical across every model in our grid.
+
+    ``second_moments`` values must broadcast against their parameter
+    (src/calibration/second_moment.py::broadcast_shape). A missing one is an error:
+    upstream falls back to ``|W|`` there, which would make a Wanda cell a magnitude cell.
+    """
+    import copy
+
+    import torch
+
+    from .torch_weights import projection_parameters
+
+    if not (0.0 <= target_sparsity <= 1.0):
+        raise ValueError(f"target_sparsity must be in [0, 1], got {target_sparsity}")
+    names = list(names) if names is not None else projection_parameters(model)
+    missing = [n for n in names if n not in second_moments]
+    if missing:
+        raise ValueError(
+            f"no second moment for {len(missing)} tensors (first: {missing[0]}); refusing "
+            "to score them by |W| alone"
+        )
+    pruned = copy.deepcopy(model)
+    params = dict(pruned.named_parameters())
+    with torch.no_grad():
+        for name in names:
+            weight = params[name]
+            s2 = torch.as_tensor(np.asarray(second_moments[name]), dtype=torch.float32, device=weight.device)
+            if torch.broadcast_shapes(s2.shape, weight.shape) != weight.shape:
+                raise ValueError(
+                    f"{name}: second moment of shape {tuple(s2.shape)} does not broadcast "
+                    f"against the weight {tuple(weight.shape)}"
+                )
+            metric = weight.detach().abs().to(torch.float32) * torch.sqrt(s2 + 1e-12)
+            k = int(metric.numel() * target_sparsity)
+            if k <= 0:
+                continue
+            threshold = torch.kthvalue(metric.flatten(), min(k, metric.numel() - 1)).values
+            weight.mul_((metric > threshold).to(weight.dtype))
+    return pruned
+
+
 class MagnitudePruner:
     """Magnitude pruner (Compressor protocol) — engineering draft.
 
@@ -469,4 +532,5 @@ __all__ = [
     "prune_magnitude",
     "prune_magnitude_torch",
     "prune_wanda",
+    "prune_wanda_torch",
 ]

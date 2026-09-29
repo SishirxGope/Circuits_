@@ -8,7 +8,8 @@ a real model and it raises `NotImplementedError`. The deployment scripts in
 `plan_a_local_pc/` and `plan_b_dgx_spark/` therefore call the preflight first and refuse to
 start, rather than failing four hours into a queue at night.
 
-Current state: **4 of 9 checks blocked** (was 8 of 9 on 2026-09-21).
+Current state: **4 of 10 checks blocked** (was 8 of 9 on 2026-09-21). The tenth check,
+Q7 calibration caches, was added 2026-09-29: it is missing *data*, not missing code.
 
 Run `python deploy/shared/preflight_blockers.py` for the live status; this table is a
 summary and can drift.
@@ -20,15 +21,31 @@ summary and can drift.
 | B2 | Magnitude pruner | **DONE** — `magnitude_prune.py::prune_magnitude_torch`, 2026-09-27 | engineering |
 | B2 | GPTQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
 | B2 | AWQ compressor | BLOCKED — needs the Q7 calibration cache | engineering |
-| B2 | Wanda pruner | BLOCKED — needs the Q7 calibration cache (activation second moments) | engineering |
+| B2 | Wanda pruner | **DONE** (code) — `magnitude_prune.py::prune_wanda_torch`, masks identical to upstream's own function, 2026-09-29 | engineering |
+| Q7 | Calibration caches | BLOCKED — not built; `experiments/build_calibration_cache.py`, needs `allow_external_dataset_download` | data |
 | B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
 | B6 | GPT-2 IOI exit gate | BLOCKED (test exists, skipped) — needs a PI-supplied reference edge list + tolerance | engineering |
 
-**The three remaining B2 families share one dependency.** Wanda, GPTQ and AWQ all need
-per-tensor activation statistics from the Q7 calibration corpus (`configs/calibration/final.yaml`:
-fineweb-edu, 300k tokens, **seed 7**, bf16 forward). Building that cache once clears all three.
-It also needs `mode.allow_external_dataset_download`.
+**Wanda is waiting on data, not code.** Its real path, the token-cache builder and the
+E[x^2] collector all exist and are tested (`src/calibration/`). What is missing is the cache
+itself: fineweb-edu, 300k tokens, **seed 7**, bf16 forward (`configs/calibration/final.yaml`),
+one per tokenizer, built on the Spark with
+
+    python experiments/build_calibration_cache.py mode=scientific_run model=<name>
+
+for each of `pythia160m pythia410m gemma2_2b llama32_1b`. That needs
+`mode.allow_external_dataset_download`. The first Wanda cell then collects E[x^2] once per
+model and every later cell, in either stage, reuses the same file.
+
+GPTQ and AWQ will calibrate on the same cache, but they still need code, and GPTQ needs more
+than Wanda's statistic: the full input Hessian X^T X per layer, not just its diagonal.
+
+**The collector does not read `ln1/ln2.hook_normalized`.** TransformerLens fires that hook
+*before* the norm's affine `* w + b`, so it equals the projection input only for untrained
+norms. Our models load with `fold_ln=False`, so reading it would have been wrong on every real
+model without raising. The collector hooks the attention/MLP module inputs instead; see
+`src/calibration/second_moment.py`.
 
 **B3 was the silent one and its fix changed two numbers.** The universe is now the structural
 EAP universe intersected with the observed nodes, and there is one N *per comparison level*.
@@ -89,16 +106,17 @@ Build order, easiest first:
    quantize per output channel, write back as float32. You are studying quantization *error*,
    not deploying INT4, so simulated quantization is correct. Bits 8, 6, 4.
 2. **Magnitude** — zero the smallest-|W| fraction per tensor. Sparsities 0.2, 0.4, 0.6.
-3. **Wanda** — score `|W| · ‖X‖₂` per input channel, pruned per output row. Needs calibration
-   activations (FineWeb-Edu, 300k tokens, seed 7 — `configs/calibration/final.yaml`).
-   Reference arXiv:2306.11695 — **verify against the paper, never code from memory.**
+3. **Wanda** — DONE 2026-09-29. Score `|W| · sqrt(E[x^2])`, thresholded **per matrix**, as
+   upstream's revision does (`reprune.py`: "per-matrix scores"). The Wanda paper
+   (arXiv:2306.11695) and upstream's notebook compare within each output row instead; the
+   revision is what produced the results C5 correlates against, so we follow it and report
+   the deviation from the paper.
 4. **GPTQ**, 5. **AWQ** — see the dependency warning below.
 
-> **The existing stubs say magnitude and Wanda "wrap `saediag.pruning`" from
-> `sae-pruning-paper`.** That package is **not installed and the fork is not on this machine**
-> (see "Missing dependencies" below). Decide deliberately: wrap the upstream package once it
-> is available, or implement in torch. Wrapping requires the `# Adapted from: <url> @ <commit>,
-> <license>` header (`AI_RULES.md` §7) and the license in `THIRD_PARTY_LICENSES/`.
+> **Magnitude and Wanda are torch reimplementations of `saediag.pruning`**, not wrappers:
+> TransformerLens has no `nn.Linear` modules for upstream's functions to act on. The fork is
+> at `../sae-pruning-paper-main` (read-only), and `tests/test_wanda_torch.py` runs upstream's
+> own `prune_wanda_style_inplace` on the equivalent HF layout and requires identical masks.
 
 > **GPTQ/AWQ and ARM.** `auto-gptq` and `autoawq` ship x86-64 wheels and commonly fail to
 > build on the Spark's aarch64. **Recommendation: implement both directly in torch** (~150

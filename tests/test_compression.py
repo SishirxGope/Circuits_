@@ -303,12 +303,13 @@ class TestWeightDeltaFeedsTheNull:
 # this list only when its real path lands.
 #   rtn        - real path landed 2026-09-27 (deploy/BLOCKERS.md B2)
 #   magnitude  - real path landed 2026-09-27
-#   wanda      - still blocked: needs the Q7 calibration cache (activation second moments)
-#   gptq/awq   - still blocked: need the Q7 calibration cache
-_UNIMPLEMENTED = [WandaPruner(), GptqCompressor(), AwqCompressor()]
-_UNIMPLEMENTED_IDS = ["wanda", "gptq", "awq"]
-_IMPLEMENTED = [RtnQuantizer(), MagnitudePruner()]
-_IMPLEMENTED_IDS = ["rtn", "magnitude"]
+#   wanda      - real path landed 2026-09-29 (tests/test_wanda_torch.py); its DATA, the
+#                Q7 calibration cache, is gated separately (preflight "Q7 calibration caches")
+#   gptq/awq   - still blocked: no real-model path yet
+_UNIMPLEMENTED = [GptqCompressor(), AwqCompressor()]
+_UNIMPLEMENTED_IDS = ["gptq", "awq"]
+_IMPLEMENTED = [RtnQuantizer(), MagnitudePruner(), WandaPruner()]
+_IMPLEMENTED_IDS = ["rtn", "magnitude", "wanda"]
 
 
 class TestRealModelsAreStillRefused:

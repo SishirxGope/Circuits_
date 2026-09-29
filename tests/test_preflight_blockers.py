@@ -52,17 +52,67 @@ def test_the_compressor_probe_is_handed_a_real_torch_module(preflight):
 
 
 def test_b2_status_matches_which_families_are_actually_implemented(preflight):
-    """RTN and magnitude landed 2026-09-27. Wanda, GPTQ and AWQ all need the Q7
-    calibration cache, so they must keep gating the queue."""
+    """RTN and magnitude landed 2026-09-27, Wanda's code 2026-09-29. GPTQ and AWQ have no
+    real-model path, so they must keep gating the queue."""
     pytest.importorskip("torch")
     status = {
         label.replace("B2 compressor: ", ""): ok
         for label, ok, _ in preflight.check_compressors()
     }
-    for family in ("rtn", "magnitude"):
+    for family in ("rtn", "magnitude", "wanda"):
         assert status[family] is True, f"{family} is implemented; a BLOCKED keeps the gate shut"
-    for family in ("gptq", "awq", "wanda"):
-        assert status[family] is False, f"{family} still needs calibration data (Q7)"
+    for family in ("gptq", "awq"):
+        assert status[family] is False, f"{family} has no real-model path yet"
+
+
+def test_the_wanda_probe_statistics_can_tell_wanda_from_magnitude(preflight):
+    """With a constant E[x^2], Wanda's score is a rescaled |W| and the probe would pass a
+    Wanda that ignored its statistics."""
+    pytest.importorskip("torch")
+    moments = preflight._probe_second_moments()
+    assert moments, "the probe supplies no statistics, so Wanda cannot be probed"
+    for name, stat in moments.items():
+        assert (stat > 0).all() and stat.std() > 0, name
+
+
+class TestCalibrationData:
+    """Q7 is data, not code: reported separately so a missing cache does not read as a
+    stub, and so building the cache - not engineering - is what opens it."""
+
+    def _write_caches(self, preflight, root, *, tamper=None):
+        import numpy as np
+        import yaml
+
+        from src.calibration.token_cache import cache_path, save_token_cache
+
+        calibration = yaml.safe_load((REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8"))
+        for model in preflight._wanda_models():
+            model_cfg = yaml.safe_load((REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8"))
+            path = cache_path({"calibration": calibration, "model": model_cfg, "calibration_root": str(root)})
+            tokens = np.arange(512, dtype=np.int64).reshape(2, 256)
+            save_token_cache(path, tokens, {})
+            if model == tamper:
+                np.save(path, tokens[::-1].copy())
+
+    def test_every_model_with_a_wanda_cell_needs_a_cache(self, preflight):
+        assert preflight._wanda_models() == ["gemma2_2b", "llama32_1b", "pythia160m", "pythia410m"]
+
+    def test_absent_caches_block_and_name_the_models(self, preflight, tmp_path):
+        label, ok, detail = preflight.check_calibration_data(tmp_path)
+        assert label == "Q7 calibration caches" and ok is False
+        assert "not built for" in detail and "gemma2_2b" in detail
+        assert "allow_external_dataset_download" in detail
+
+    def test_verified_caches_open_it(self, preflight, tmp_path):
+        self._write_caches(preflight, tmp_path)
+        _, ok, detail = preflight.check_calibration_data(tmp_path)
+        assert ok is True, detail
+        assert "fingerprint-verified for 4 models" in detail
+
+    def test_an_altered_cache_blocks(self, preflight, tmp_path):
+        self._write_caches(preflight, tmp_path, tamper="llama32_1b")
+        _, ok, detail = preflight.check_calibration_data(tmp_path)
+        assert ok is False and "failed verification" in detail and "llama32_1b" in detail
 
 
 def test_an_implemented_family_reads_ok_by_succeeding_not_by_erroring(preflight):
@@ -149,7 +199,7 @@ def test_the_gate_is_still_shut_overall(preflight):
     """Whole-script verdict: science must not be clear to run yet."""
     pytest.importorskip("torch")
     results = [preflight.check_null_perturber(), *preflight.check_compressors(),
-               preflight.check_chance_floor()]
+               preflight.check_calibration_data(), preflight.check_chance_floor()]
     assert not all(ok for _, ok, _ in results), (
         "the preflight gate reads clear; if that is intended, the remaining blockers in "
         "deploy/BLOCKERS.md should have been closed first"

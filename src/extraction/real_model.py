@@ -154,6 +154,20 @@ def load_pinned_model(resolved: Mapping[str, Any], device: str | None = None):
         )
     del hf_model
 
+    enable_extraction_hooks(model)
+    model.eval()
+    return model
+
+
+def enable_extraction_hooks(model: Any) -> Any:
+    """Turn on the hooks extraction needs, in place, and return the model.
+
+    Split out of ``load_pinned_model`` so anything that must see the model exactly as
+    extraction does - the calibration second-moment collector and its tests - calls this
+    rather than a copy of the flag list that could drift. With these flags on,
+    ``ln1.hook_normalized`` fires three times per block (the Q, K and V inputs) with an
+    extra head axis, which the collector depends on (src/calibration/second_moment.py).
+    """
     model.set_use_attn_result(True)
     model.set_use_split_qkv_input(True)
     model.set_use_hook_mlp_in(True)
@@ -172,8 +186,7 @@ def load_pinned_model(resolved: Mapping[str, Any], device: str | None = None):
     # silently mis-scale the matched-magnitude null.
     if getattr(model.cfg, "n_key_value_heads", None) not in (None, model.cfg.n_heads):
         model.set_ungroup_grouped_query_attention(True)
-    model.eval()
     return model
 
 
-__all__ = ["load_pinned_model", "architecture_mismatches"]
+__all__ = ["architecture_mismatches", "enable_extraction_hooks", "load_pinned_model"]

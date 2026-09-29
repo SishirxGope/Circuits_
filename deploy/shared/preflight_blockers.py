@@ -128,6 +128,85 @@ def _probe_rng():
     return np.random.default_rng(0)
 
 
+def _probe_second_moments() -> dict:
+    """Positive, non-uniform E[x^2] for every projection of the probe model.
+
+    Non-uniform so Wanda's score is not a rescaled |W|: with a constant statistic the
+    probe could not tell Wanda from per-matrix magnitude pruning.
+    """
+    try:
+        import numpy as np
+
+        from src.calibration.second_moment import broadcast_shape, input_source_for
+        from src.compression.torch_weights import projection_parameters
+    except Exception:  # noqa: BLE001 - no torch: the compressor probe stays BLOCKED anyway
+        return {}
+    model = _probe_model()
+    params = dict(model.named_parameters()) if hasattr(model, "named_parameters") else {}
+    rng = np.random.default_rng(0)
+    out = {}
+    for name in projection_parameters(model) if params else []:
+        shape = broadcast_shape(tuple(params[name].shape), input_source_for(name)[1])
+        out[name] = rng.uniform(0.1, 10.0, size=shape)
+    return out
+
+
+def _wanda_models() -> list[str]:
+    """Model config names that have a Wanda cell in any run queue."""
+    models: set[str] = set()
+    for queue in sorted((REPO / "deploy").glob("plan_*/cells_stage*.txt")):
+        for line in queue.read_text(encoding="utf-8").splitlines():
+            if line.startswith("#") or "compression_family=wanda" not in line:
+                continue
+            for token in line.split():
+                if token.startswith("model="):
+                    models.add(token.split("=", 1)[1])
+    return sorted(models)
+
+
+def check_calibration_data(root: Path | None = None) -> tuple[str, bool, str]:
+    """Q7 - the calibration token caches Wanda (and later GPTQ/AWQ) read.
+
+    Data, not code: the fix is running the builder, which needs
+    mode.allow_external_dataset_download. Each cache must exist AND match the fingerprint
+    recorded when it was built, or a queue could run on a truncated or altered set.
+    """
+    label = "Q7 calibration caches"
+    try:
+        import yaml
+
+        from src.calibration.token_cache import cache_path, load_token_cache
+    except Exception as exc:  # noqa: BLE001
+        return label, False, f"import failed: {exc}"
+    models = _wanda_models()
+    if not models:
+        return label, False, "no Wanda cell found in any queue; cannot tell which caches are needed"
+    calibration = yaml.safe_load((REPO / "configs" / "calibration" / "final.yaml").read_text(encoding="utf-8"))
+    missing, bad = [], []
+    for model in models:
+        model_cfg = yaml.safe_load((REPO / "configs" / "model" / f"{model}.yaml").read_text(encoding="utf-8"))
+        resolved = {"calibration": calibration, "model": model_cfg}
+        if root is not None:
+            resolved["calibration_root"] = str(root)
+        path = cache_path(resolved)
+        path = path if path.is_absolute() else REPO / path
+        if not path.exists():
+            missing.append(model)
+            continue
+        try:
+            load_token_cache(path)
+        except Exception as exc:  # noqa: BLE001 - any failure means the cache is unusable
+            bad.append(f"{model} ({type(exc).__name__})")
+    if missing or bad:
+        parts = []
+        if missing:
+            parts.append(f"not built for {missing}")
+        if bad:
+            parts.append(f"failed verification: {bad}")
+        return label, False, "; ".join(parts) + " - needs allow_external_dataset_download"
+    return label, True, f"present and fingerprint-verified for {len(models)} models"
+
+
 def check_compressors() -> list[tuple[str, bool, str]]:
     """B2 - the five compression families on real models."""
     out: list[tuple[str, bool, str]] = []
@@ -136,7 +215,11 @@ def check_compressors() -> list[tuple[str, bool, str]]:
         ("gptq", "GptqCompressor", "src.compression.gptq", {}),
         ("awq", "AwqCompressor", "src.compression.awq", {}),
         ("magnitude", "MagnitudePruner", "src.compression.magnitude_prune", {}),
-        ("wanda", "WandaPruner", "src.compression.wanda", {}),
+        # Wanda's CODE is probed with injected second moments; whether the calibration
+        # DATA exists is a separate check (check_calibration_data), so a missing cache
+        # reads as missing data rather than as a stub.
+        ("wanda", "WandaPruner", "src.compression.wanda",
+         {"sparsity": 0.3, "calibration": _probe_second_moments()}),
     ]
     for name, cls_name, module, kwargs in families:
         label = f"B2 compressor: {name}"
@@ -204,6 +287,7 @@ def main() -> int:
     quiet = "--quiet" in sys.argv
     results = [check_null_perturber()]
     results += check_compressors()
+    results += [check_calibration_data()]
     results += [check_chance_floor(), check_normalized_l1(), check_exit_gate()]
 
     blocked = [r for r in results if not r[1]]
@@ -218,8 +302,8 @@ def main() -> int:
 
     if blocked:
         print(f"REFUSING TO RUN SCIENCE: {len(blocked)} of {len(results)} blockers unimplemented.")
-        print("These are engineering gaps, not configuration problems. Implement them")
-        print("first - deploy/BLOCKERS.md has the specification for each.")
+        print("Each is an engineering gap or missing calibration data, not a configuration")
+        print("problem - deploy/BLOCKERS.md has the specification for each.")
         return 1
 
     print(f"All {len(results)} blockers implemented. Clear to run science.")

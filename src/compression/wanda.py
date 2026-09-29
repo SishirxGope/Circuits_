@@ -18,18 +18,22 @@ Upstream interface (names verified against the fork)::
     prune_wanda_style_inplace(model, ex2_by_linear, target_sparsity, ...)
     collect_linear_input_second_moment_from_cache(model, token_cache, ...)
 
-Engineering scope: pure numpy scoring/implementation in
-src/compression/magnitude_prune.py (prune_wanda); synthetic calibration supplies
-the second-moment stand-in for dry-runs (Q7). Real models: NotImplementedError.
+MockModel: pure numpy scoring (magnitude_prune.prune_wanda) with synthetic second moments.
+Real models (2026-09-29): magnitude_prune.prune_wanda_torch, per matrix as upstream's
+revision does, with E[x^2] from the Q7 calibration cache via
+src/calibration/second_moment.py. Until that cache is built on a machine, the real path
+raises CalibrationUnavailable - the code exists, the data does not.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from ..interfaces import CompressedModel, Model, PerTensorFrobenius
 from ..synthetic.mock_model import MockModel
-from .magnitude_prune import prune_wanda
+from .magnitude_prune import prune_wanda, prune_wanda_torch
+from .torch_weights import is_torch_model
 
 TECHNIQUE_CITE = "Wanda: Sun et al. 2023 (arXiv:2306.11695)"
 
@@ -52,11 +56,28 @@ def synthetic_second_moments(model: MockModel, seed: int = 0) -> dict[str, Any]:
 
 
 class WandaPruner:
-    """Wanda pruner (Compressor protocol) — engineering draft."""
+    """Wanda pruner (Compressor protocol).
 
-    def __init__(self, sparsity: float = 0.3, calibration: dict[str, Any] | None = None) -> None:
+    ``calibration`` injects per-parameter second moments directly (tests, the preflight
+    probe). Left as None, a real model's statistics come from the Q7 calibration cache
+    named by the cell's config, collected once and shared by Stage B and Stage C.
+    """
+
+    def __init__(self, sparsity: float = 0.3, calibration: Mapping[str, Any] | None = None) -> None:
         self.sparsity = float(sparsity)
-        self.calibration = calibration  # synthetic-calibration dict for dry-runs (Q7)
+        self.calibration = calibration
+
+    def _second_moments(self, model: Any, cfg: Any) -> Mapping[str, Any]:
+        if self.calibration:
+            return self.calibration
+        from ..calibration.second_moment import load_or_collect_second_moments
+        from ..calibration.token_cache import CalibrationUnavailable
+
+        if not cfg:
+            raise CalibrationUnavailable(
+                "Wanda needs the cell's resolved config to locate its calibration cache"
+            )
+        return load_or_collect_second_moments(model, cfg)
 
     def apply(self, model: Model, cfg: Any) -> CompressedModel:
         if isinstance(model, MockModel):
@@ -69,18 +90,33 @@ class WandaPruner:
                 d_model=model.d_model,
                 weights=pruned,
             )
+        if is_torch_model(model):
+            return prune_wanda_torch(model, self._second_moments(model, cfg), self.sparsity)
         raise NotImplementedError(
-            f"{TECHNIQUE_CITE}; real-model Wanda wraps saediag.pruning "
-            "(sae-pruning-paper @ 261191804675…) and requires Stage C approval "
-            "+ verified calibration corpus (Q7) + RUN MODEL DOWNLOAD"
+            f"{TECHNIQUE_CITE}: WandaPruner supports MockModel and torch modules exposing "
+            f"named_parameters(); got {type(model).__name__}."
         )
 
     def weight_delta(self, model: Model, cfg: Any) -> PerTensorFrobenius:
         if isinstance(model, MockModel):
             return model.weight_delta_frobenius(self.apply(model, cfg))
+        if is_torch_model(model):
+            import torch
+
+            # MEASURED from the pruned copy, as for magnitude: ties at the threshold make
+            # the achieved sparsity differ from the label, so no analytic estimate.
+            pruned = dict(self.apply(model, cfg).named_parameters())
+            out: PerTensorFrobenius = {}
+            with torch.no_grad():
+                for name, param in model.named_parameters():
+                    delta = pruned[name].detach().to(torch.float32) - param.detach().to(
+                        torch.float32
+                    )
+                    out[name] = float(torch.linalg.vector_norm(delta).item())
+            return out
         raise NotImplementedError(
-            "real-model Wanda weight_delta requires Stage C approval; "
-            "use the engineering path (MockModel) for dry-runs"
+            "wanda weight_delta supports MockModel and torch modules exposing "
+            f"named_parameters(); got {type(model).__name__}."
         )
 
 

@@ -19,6 +19,11 @@ htmlcov/
 # Remove this line if the PI decides run dirs should be version-controlled.
 runs/
 
+# Q7 calibration caches (src/calibration/): fineweb-edu token windows and the E[x^2]
+# statistics collected over them. Regenerable from configs/calibration/final.yaml; each
+# cache carries a fingerprint sidecar, so a rebuilt one is checked against the original.
+calibration_cache/
+
 
 # Model weights are NEVER committed (Gemma/Llama licenses forbid redistribution;
 # AI_RULES.md §5, PRD.md §6 artifact checklist).
