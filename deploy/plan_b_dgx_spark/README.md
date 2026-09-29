@@ -76,9 +76,10 @@ The steps below are the same things it runs; call them individually when you wan
 day. If `torch.cuda.is_available()` is `False`, stop and fix it before installing anything
 else — every later failure is a confusing symptom of that one.
 
-**2. GPTQ and AWQ probably will not install.** `auto-gptq`/`autoawq` ship x86-64 wheels. Step 1
-tells you if they failed and lists the four options in order. The recommended one is to use
-in-repo torch implementations so both machines run identical code.
+**2. GPTQ and AWQ need nothing installed.** Since 2026-09-29 both are torch ports in
+`src/compression/` (`auto-gptq`/`autoawq` ship x86-64 wheels and do not build here), so both
+machines run identical code. Step 1 no longer tries to install the libraries: a half-successful
+install can replace the CUDA torch.
 
 **3. Concurrency is per-model.** Peak memory differs by an order of magnitude between
 Pythia-160M (4.26 GiB measured) and Gemma-2-2B (~25 GiB estimated). **Always start with

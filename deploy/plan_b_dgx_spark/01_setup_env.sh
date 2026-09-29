@@ -30,16 +30,14 @@ echo "=== 2. project dependencies ==="
 pip install -e .
 
 echo ""
-echo "=== 3. optional quantization libraries (expected to be the hard part on ARM) ==="
-if pip install auto-gptq autoawq 2>/dev/null && python -c "import auto_gptq, awq" 2>/dev/null; then
-  echo "  auto-gptq + autoawq OK"
+echo "=== 3. quantization libraries: none needed ==="
+# GPTQ and AWQ are torch ports in src/compression/{gptq,awq}.py (2026-09-29), so
+# auto-gptq/autoawq are deliberately NOT installed: they do not build on aarch64, and a
+# pip install that half-succeeds can replace the CUDA torch this script just checked.
+if python -c "import auto_gptq" 2>/dev/null || python -c "import awq" 2>/dev/null; then
+  echo "  NOTE: auto-gptq/autoawq are installed but unused; the pipeline never imports them."
 else
-  echo "  auto-gptq / autoawq NOT available on this platform."
-  echo "  This is the documented ARM64 failure. Options, in order (PLAN_B section 4):"
-  echo "    1. use the in-repo torch implementations of GPTQ/AWQ (no build needed)"
-  echo "    2. build from source with TORCH_CUDA_ARCH_LIST set to the value printed above"
-  echo "    3. fall back to the libraries' CPU kernels (slow but scientifically equivalent)"
-  echo "    4. cut the GPTQ/AWQ cells and RECORD the cut in docs/HUMAN_DECISIONS.md"
+  echo "  OK - in-repo GPTQ/AWQ, nothing to install."
 fi
 
 echo ""
