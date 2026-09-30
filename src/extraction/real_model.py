@@ -1,4 +1,5 @@
 # [AI-GEN] agent=Claude date=2026-09-14 task=Load a real model at its pinned HF revision into TransformerLens (Stage A engineering)
+# modified: [AI-GEN] agent=Claude date=2026-09-30 task=B6 - optional tl_name for checkpoints TransformerLens names differently
 # reviewed-by: PENDING
 
 """Loading a real model exactly at its Q5-pinned revision.
@@ -136,8 +137,10 @@ def load_pinned_model(resolved: Mapping[str, Any], device: str | None = None):
         )
     tokenizer = AutoTokenizer.from_pretrained(hf_id, revision=revision)
 
+    # TransformerLens names a few checkpoints differently from their HF repo (GPT-2 small is
+    # "gpt2", its repo openai-community/gpt2); the weights still come from hf_id @ revision.
     model = HookedTransformer.from_pretrained(
-        hf_id,
+        str(model_cfg.get("tl_name") or hf_id),
         hf_model=hf_model,
         tokenizer=tokenizer,
         device=device,

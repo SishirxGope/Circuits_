@@ -28,7 +28,7 @@ summary and can drift.
 | Q7 | Calibration caches (Wanda, GPTQ, AWQ) | **DONE on the Spark** 2026-09-29 — fineweb-edu @ `87f09149…`, fingerprints recorded in `deploy/shared/calibration_fingerprints.json` | data |
 | B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
-| B6 | GPT-2 IOI exit gate | BLOCKED — needs **your** reference edges + tolerance (`data/reference/ioi_gpt2_small_edges.json`), then GPT-2 extraction wiring | PI input + engineering |
+| B6 | GPT-2 IOI exit gate | Engineering **DONE** 2026-09-30 (reference edges derived, extraction wired). BLOCKED on **your tolerance** only, then one gate run on the Spark | PI input |
 
 **Wanda is unblocked on the Spark: code and data.** The four caches were built 2026-09-29
 (fineweb-edu `sample-10BT` @ `87f09149ef4734204d70ed1d046ddc9ca3f2b8f9`, 300k tokens,
@@ -187,25 +187,32 @@ word "skip", which the file always contains, so B6 could never have read OK. It 
 the record the gate writes when it passes (`data/reference/ioi_gpt2_small_gate_pass.json`)
 and checks it against the reference file's current sha256 and your tolerance.
 
-**What it needs, in order:**
+**Done (engineering, 2026-09-30):**
 
-1. **From you (PI-owned, AI_RULES 2.2):** `data/reference/ioi_gpt2_small_edges.json`,
-   committed, with the edges AND the tolerance in one file so neither can drift from the
-   other. Set the tolerance before you see a number (HUMAN_DECISIONS.md Step 7):
+- **Reference edges, derived, never typed.** `src/tasks/ioi_reference.py` ports ACDC's
+  `get_ioi_true_edges` (acdc/ioi/utils.py @ `bc99ace8`): the Wang et al. circuit (26 heads,
+  7 classes, their Q/K/V connections) as the edge-level ground truth ACDC and EAP are both
+  scored against, in our dense-node ids. `tests/test_ioi_reference.py` runs ACDC's own code
+  verbatim and requires the two sets to be equal: **963 edges**, the same set edge for edge,
+  over the same 32,491-edge universe.
+- **Extraction.** `configs/model/gpt2_small.yaml` at the pin (`607a30d7…`, architecture
+  verified against its config.json). The gate runs Stage A exactly as every grid cell does
+  (`GATE_OVERRIDES` = `_run_one.sh`'s overrides + model + task, held equal by a test):
+  dense-node EAP, B=16 x S=5, 300 prompts. The extracted set is that run's **core band**.
 
-       {"edges": ["<src>-><dst>", ...],   // our edge_id convention (ARCHITECTURE.md §2)
-        "tolerance": 0.xx,                // Jaccard the gate must reach
-        "source": "Wang et al. 2023, ... (how the edges were derived)",
-        "decided_on": "YYYY-MM-DD"}
+**What it still needs, in order:**
 
-   The gate refuses a bare edge list, since that has no tolerance.
-2. **Engineering:** `extract_gate_edges()` in the test - a `configs/model/gpt2_small.yaml`
-   at the recorded pin (`607a30d7…`) with its architecture verified, a Stage A run of the
-   dense IOI ensemble, and that run's core-band edges. Until then the gate raises rather
-   than report an overlap it never measured.
-3. **Then:** `RUN_IOI_GPT2_REFERENCE=1 python -m pytest tests/test_regression_ioi_gpt2_small.py`
-   on the Spark; a pass writes the record and B6 opens. Each gate run deletes the
-   previous record before it extracts anything, so a later failing run closes B6 again.
+1. **From you (PI-owned, AI_RULES 2.2): the tolerance** - the Jaccard the core band must
+   reach. Decide it before anyone sees a gate number (HUMAN_DECISIONS.md Step 7), then:
+
+       python deploy/shared/make_ioi_reference.py --tolerance <T> --decided-on YYYY-MM-DD
+
+   and **commit** `data/reference/ioi_gpt2_small_edges.json` - the commit is the
+   pre-registration. The script has no default and will not overwrite an existing file.
+2. **On the Spark:** `RUN_IOI_GPT2_REFERENCE=1 python -m pytest tests/test_regression_ioi_gpt2_small.py -s`.
+   It downloads GPT-2 small at the pin, runs Stage A under `runs/`, prints the Jaccard, and
+   on a pass writes the record that opens B6. Each gate run deletes the previous record
+   before it extracts anything, so a later failing run closes B6 again.
 
 Fixed on the way: the test looked for the reference file one directory *above* the repo,
 so a file placed in `data/reference/` would never have been found.

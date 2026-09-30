@@ -483,7 +483,7 @@ nothing and removes the risk permanently.
 | `EleutherAI/pythia-160m` | `50f5173d932e8e61f858120bcb800b97af589f46` | no | `configs/model/pythia160m.yaml` |
 | `EleutherAI/pythia-410m` | `9879c9b5f8bea9051dcb0e68dff21493d67e9d4f` | no | `configs/model/pythia410m.yaml` |
 | `EleutherAI/pythia-70m` | `a39f36b100fe8a5377810d56c3f4789b9c53ac42` | no | no config yet |
-| `openai-community/gpt2` (exit gate) | `607a30d783dfa663caf39e06633721c8d4cfcd7e` | no | no config yet |
+| `openai-community/gpt2` (exit gate) | `607a30d783dfa663caf39e06633721c8d4cfcd7e` | no | `configs/model/gpt2_small.yaml` |
 | `mntss/gemma-scope-transcoders` | `9250a2d4860ce5ed5c96c14d5882b7d8162809a3` | no | `transcoder_revision:` in `gemma2_2b.yaml` |
 | `mntss/transcoder-Llama-3.2-1B` | `c37a82c1ec4cea30d424850d159b17b720ce19e2` | no | `transcoder_revision:` in `llama32_1b.yaml` |
 

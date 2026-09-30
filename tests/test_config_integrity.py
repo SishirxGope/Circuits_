@@ -371,6 +371,7 @@ class TestOpenDecisionsAreStillMarked:
             "llama32_1b": "4e20de362430cd3b72f300e6b0f18e50e7166e08",
             "pythia160m": "50f5173d932e8e61f858120bcb800b97af589f46",
             "pythia410m": "9879c9b5f8bea9051dcb0e68dff21493d67e9d4f",
+            "gpt2_small": "607a30d783dfa663caf39e06633721c8d4cfcd7e",  # the exit gate (B6)
         }
         for name, pin in expected.items():
             got = _load(CONFIGS / "model" / f"{name}.yaml")["hf_revision"]

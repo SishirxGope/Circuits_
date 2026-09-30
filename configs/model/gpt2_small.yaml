@@ -1,0 +1,28 @@
+# [AI-GEN] agent=Claude date=2026-09-30 task=B6 exit gate - GPT-2 small at its Q5 pin (docs/HUMAN_DECISIONS.md)
+# reviewed-by: PENDING
+#
+# EXIT-GATE MODEL ONLY (ARCHITECTURE.md §6, deploy/BLOCKERS.md B6). Not in any compression
+# grid and never calibrated: it exists so tests/test_regression_ioi_gpt2_small.py can run
+# Stage A exactly as the grid cells do and compare the IOI core band with the published
+# circuit. IMMUTABILITY per AI_RULES.md 1.2 once the gate has run against it.
+
+name: gpt2-small
+hf_id: openai-community/gpt2
+hf_revision: 607a30d783dfa663caf39e06633721c8d4cfcd7e   # Q5 PINNED 2026-09-12 (HUMAN_DECISIONS.md table;
+                                                        # configs/provisional_defaults.yaml gpt2_exit_gate)
+tl_name: gpt2                      # TransformerLens knows this checkpoint only as "gpt2" (the repo's legacy
+                                   # id, which HF redirects to openai-community/gpt2); weights and config are
+                                   # still loaded from hf_id at hf_revision, and the architecture is asserted
+n_params: 124M
+d_model: 768                       # VERIFIED 2026-09-30 against config.json at the pinned sha (n_embd)
+n_layers: 12                       # VERIFIED 2026-09-30 against config.json at the pinned sha (n_layer)
+n_heads: 12                        # VERIFIED 2026-09-30 against config.json at the pinned sha (n_head)
+head_dim: 64                       # VERIFIED 2026-09-30: n_embd / n_head (config.json has no head_dim)
+context_length: 1024               # VERIFIED 2026-09-30 against config.json at the pinned sha (n_positions)
+dtype: float32                     # The dtype of both reference setups the gate is compared against:
+                                   # ACDC's get_gpt2_small (acdc/ioi/utils.py @ bc99ace8) and the EAP
+                                   # paper's GPT-2 runs load HookedTransformer at its float32 default.
+backend: transformerlens
+transcoder_set: null               # the gate runs the dense-node pipeline, as every grid cell does
+sae_layer: null
+roles: [exit_gate]

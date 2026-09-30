@@ -1,14 +1,24 @@
 # [AI-GEN] agent=OpenCode date=2026-08-07 task=Phase-1 exit-gate regression test (IOI on GPT-2 small)
 # modified: [AI-GEN] agent=Claude date=2026-09-29 task=B6 - PI file carries edges AND tolerance; a pass leaves a record preflight can verify
 # modified: [AI-GEN] agent=Claude date=2026-09-29 task=review fix - a gate run removes the previous pass record first
+# modified: [AI-GEN] agent=Claude date=2026-09-30 task=B6 - extraction wired: Stage A dense-node on GPT-2 small, core band vs ACDC's IOI ground truth
 # reviewed-by: PENDING
 
 """Phase-1 exit gate (ARCHITECTURE.md §6): reproduce one published reference circuit
 within tolerance before any real Stage A run is trusted.
 
 Gate contract:
-- Target: IOI circuit on GPT-2 small (Wang et al., ICLR 2023), pipeline A
-  (attribution-patching graph) with a pinned checkpoint.
+- Target: IOI circuit on GPT-2 small (Wang et al., ICLR 2023) at its pinned checkpoint
+  (configs/model/gpt2_small.yaml), extracted by the pipeline every grid cell runs:
+  Stage A, ``pipeline=dense-node`` (edge attribution patching), the pre-registered
+  B=16 x S=5 ensemble, 300 IOI prompts. The extracted set is that run's CORE band
+  (s(e) = 1). ``GATE_OVERRIDES`` is the cells' override list plus model and task, and a
+  test keeps it equal to deploy/plan_b_dgx_spark/_run_one.sh, so the gate cannot drift
+  from what the science runs.
+- Reference: the Wang et al. circuit as ACDC's edge-level ground truth
+  (src/tasks/ioi_reference.py; proven equal to ACDC's own code in
+  tests/test_ioi_reference.py), written into the PI's file by
+  deploy/shared/make_ioi_reference.py.
 - Tolerance: edge-set overlap vs the published reference edge list. Both the edge list
   and the tolerance are PI-owned (AI_RULES.md 2.2 - no invented numbers), and both live
   in ONE file the PI writes and commits (``REFERENCE_FILE``)::
@@ -26,8 +36,8 @@ Execution state:
 - ``edge_overlap`` and the reference-file validation are pure and tested NOW.
 - The gate itself is SKIPPED until BOTH the environment variable
   RUN_IOI_GPT2_REFERENCE is set (human intent: pinned weights, a GPU) AND the PI's
-  reference file exists. Then it FAILS, loudly, until GPT-2 extraction is wired
-  (``extract_gate_edges``) - it never reports an overlap it did not measure.
+  reference file exists. Then it runs Stage A on GPT-2 small (a real run directory under
+  runs/) and compares.
 - A pass writes ``PASS_RECORD``, which the preflight (deploy/shared/preflight_blockers.py,
   check B6) verifies against the reference file's hash. That record - not the presence
   of this file, and not the word "skip" in it - is what opens B6.
@@ -100,21 +110,54 @@ def load_reference(path: Path = REFERENCE_FILE) -> tuple[set[str], float]:
     return set(edges), float(tolerance)
 
 
-def extract_gate_edges() -> set[str]:
-    """Core edges of the dense IOI ensemble on GPT-2 small (Stage A, pinned revision).
+# The grid cells' overrides (deploy/plan_b_dgx_spark/_run_one.sh) plus the gate's model and task.
+GATE_OVERRIDES: tuple[str, ...] = (
+    "mode=scientific_run",
+    "pipeline=dense-node",
+    "ensemble=default",
+    "ensemble/decompose=final",
+    "nulls=default",
+    "comparison=final",
+    "comparison_level=both",
+    "seed=0",
+    "model=gpt2_small",
+    "task=ioi",
+)
 
-    Not wired yet. It needs configs/model/gpt2_small.yaml at the pinned revision
-    (``607a30d7...``, docs/HUMAN_DECISIONS.md) with its architecture VERIFIED, a Stage A
-    run in a mode that allows the download, and the core band of that run's freq.parquet.
-    Raising here keeps the gate from ever reporting an overlap it did not measure.
+
+def extract_gate_edges(
+    run_root: Path = REPO / "runs", overrides: tuple[str, ...] = GATE_OVERRIDES
+) -> tuple[set[str], Path]:
+    """The core band of a Stage A run composed from ``overrides``; returns (edges, run dir).
+
+    Composed with Hydra from configs/ and run through ``run_stage_a`` itself - the same
+    entrypoint, guards and outputs as any cell - then read back from its freq.parquet.
     """
-    raise NotImplementedError(
-        "GPT-2 small extraction is not wired into the exit gate yet "
-        "(configs/model/gpt2_small.yaml + a Stage A run + its core edges)"
-    )
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
+    from experiments.run_stage_a import run_stage_a
+
+    with initialize_config_dir(config_dir=str(REPO / "configs"), version_base=None):
+        cfg = compose("config", overrides=[*overrides, f"run_root={Path(run_root).as_posix()}"])
+    run_dir = Path(run_stage_a(OmegaConf.to_container(cfg, resolve=True)))
+    return core_band(run_dir), run_dir
 
 
-def write_pass_record(overlap: float, tolerance: float, n_extracted: int, n_reference: int) -> None:
+def core_band(run_dir: Path) -> set[str]:
+    """Edge ids in the CORE band of a Stage A run's freq.parquet (s(e) = 1, CIRCUS C_1)."""
+    from src.common.schema import read_freq_parquet
+
+    meta = json.loads((Path(run_dir) / "run_meta.json").read_text(encoding="utf-8"))
+    if meta.get("band_cutoffs_resolved") is not True:
+        raise RuntimeError(f"{run_dir}: the band cutoffs were not resolved, so there is no core band")
+    rows = read_freq_parquet(str(Path(run_dir) / "freq.parquet"))
+    return {row["edge_id"] for row in rows if row["band"] == "core"}
+
+
+def write_pass_record(
+    overlap: float, tolerance: float, n_extracted: int, n_reference: int, run_dir: Path | None = None
+) -> None:
     commit = subprocess.run(
         ["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
     ).stdout.strip() or None
@@ -128,6 +171,7 @@ def write_pass_record(overlap: float, tolerance: float, n_extracted: int, n_refe
             "n_extracted_edges": n_extracted,
             "n_reference_edges": n_reference,
             "git_commit": commit,
+            "stage_a_run_dir": None if run_dir is None else Path(run_dir).as_posix(),
             "date": datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
         }, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -190,9 +234,69 @@ class TestThePassRecord:
         record.write_text("{}", encoding="utf-8")
         monkeypatch.setitem(globals(), "REFERENCE_FILE", reference)
         monkeypatch.setitem(globals(), "PASS_RECORD", record)
-        with pytest.raises(NotImplementedError):
+
+        def extraction_fails(*args, **kwargs):
+            raise RuntimeError("extraction failed")
+
+        monkeypatch.setitem(globals(), "extract_gate_edges", extraction_fails)
+        with pytest.raises(RuntimeError, match="extraction failed"):
             test_ioi_gpt2_small_reference_gate()
         assert not record.exists()
+
+
+class TestTheGateRunsWhatTheCellsRun:
+    def test_the_overrides_are_the_cells_plus_model_and_task(self):
+        """_run_one.sh is what every grid cell runs; the gate must not quietly differ."""
+        script = (REPO / "deploy" / "plan_b_dgx_spark" / "_run_one.sh").read_text(encoding="utf-8")
+        block = script.split('"$PY" "$RUNNER"', 1)[1].split("then", 1)[0]
+        cell = {tok for tok in block.replace("\\", " ").split() if "=" in tok and not tok.startswith(("$", ">"))}
+        assert cell, "could not read the cell overrides from _run_one.sh"
+        gate = set(GATE_OVERRIDES)
+        assert cell <= gate, f"the cells run {sorted(cell - gate)} and the gate does not"
+        assert gate - cell == {"model=gpt2_small", "task=ioi"}
+
+    def test_the_gate_config_clears_the_scientific_guards(self):
+        pytest.importorskip("hydra")
+        from hydra import compose, initialize_config_dir
+        from omegaconf import OmegaConf
+
+        from src.common.config_guard import assert_engineering_dry_run_limits, assert_no_gating_questions
+
+        with initialize_config_dir(config_dir=str(REPO / "configs"), version_base=None):
+            resolved = OmegaConf.to_container(compose("config", overrides=list(GATE_OVERRIDES)), resolve=True)
+        assert_no_gating_questions(resolved, "dense-node")
+        assert_engineering_dry_run_limits(resolved, stage="stageA")
+        assert resolved["model"]["hf_revision"] == "607a30d783dfa663caf39e06633721c8d4cfcd7e"
+        assert resolved["mode"]["allow_model_download"] is True
+
+    def test_the_core_band_is_read_from_the_run(self, tmp_path):
+        """The extraction plumbing end to end, on the synthetic engineering path."""
+        pytest.importorskip("hydra")
+        pytest.importorskip("pyarrow")
+        from src.common.schema import read_freq_parquet
+
+        overrides = ("mode=engineering_dry_run", "pipeline=dense-node", "seed=0")
+        core, run_dir = extract_gate_edges(tmp_path, overrides)
+        rows = read_freq_parquet(str(run_dir / "freq.parquet"))
+        assert run_dir.parent == tmp_path and rows
+        assert core == {r["edge_id"] for r in rows if r["band"] == "core"}
+
+    def test_only_core_edges_are_extracted(self, tmp_path):
+        pytest.importorskip("pyarrow")
+        from src.common.schema import write_freq_parquet
+
+        write_freq_parquet(str(tmp_path / "freq.parquet"), [
+            {"edge_id": "EMB->LOGIT", "s_e": 1.0, "band": "core"},
+            {"edge_id": "L0.H0->LOGIT", "s_e": 0.5, "band": "contingent"},
+            {"edge_id": "L0.MLP->LOGIT", "s_e": 0.1, "band": "noise"},
+        ])
+        (tmp_path / "run_meta.json").write_text(json.dumps({"band_cutoffs_resolved": True}), encoding="utf-8")
+        assert core_band(tmp_path) == {"EMB->LOGIT"}
+
+    def test_a_run_without_bands_is_refused(self, tmp_path):
+        (tmp_path / "run_meta.json").write_text(json.dumps({"band_cutoffs_resolved": False}), encoding="utf-8")
+        with pytest.raises(RuntimeError, match="core band"):
+            core_band(tmp_path)
 
 
 @pytest.mark.skipif(
@@ -217,11 +321,13 @@ def test_ioi_gpt2_small_reference_gate():
     # A record from an earlier pass must not outlive a run that fails: only THIS run's
     # pass may open B6, so the old record goes before anything can fail.
     PASS_RECORD.unlink(missing_ok=True)
-    extracted = extract_gate_edges()
+    extracted, run_dir = extract_gate_edges()
 
     overlap = edge_overlap(extracted, reference)
-    assert overlap >= tolerance, (
-        f"exit gate FAILED: extracted-vs-reference Jaccard {overlap:.3f} < PI tolerance "
-        f"{tolerance}. Blocking real Stage A runs."
+    summary = (
+        f"Jaccard {overlap:.3f} (PI tolerance {tolerance}); core band {len(extracted)} edges, "
+        f"reference {len(reference)}, shared {len(extracted & reference)}; Stage A run {run_dir}"
     )
-    write_pass_record(overlap, tolerance, len(extracted), len(reference))
+    print(f"\nexit gate: {summary}")
+    assert overlap >= tolerance, f"exit gate FAILED: {summary}. Blocking real Stage A runs."
+    write_pass_record(overlap, tolerance, len(extracted), len(reference), run_dir)
