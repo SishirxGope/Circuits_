@@ -152,6 +152,17 @@ find a circuit everyone agrees exists cannot be believed when it says one moved.
 You must supply two things: the reference edge list, and the tolerance (what Jaccard
 counts as "reproduced"). Set the tolerance **before** you see your own number.
 
+> **DECIDED 2026-09-30 (PI), before any gate run: tolerance = 0.2** (Jaccard of the Stage A
+> core band against the reference). Reference edges: ACDC's `get_ioi_true_edges` @ `bc99ace8`
+> in dense-node ids, 963 edges (`src/tasks/ioi_reference.py`, proven equal to ACDC's code in
+> `tests/test_ioi_reference.py`). File: `data/reference/ioi_gpt2_small_edges.json`.
+> Rationale: a random edge set of comparable size scores ~0.01-0.02 (963 of 32,491 possible
+> edges), so 0.2 is ~10x chance; higher would be unfair because 748 of the 963 reference edges
+> are ACDC's convention of connecting every circuit head to every MLP, which EAP is not built
+> to reproduce. Accepted risk: if the core band is much smaller than 963 edges its maximum
+> possible Jaccard falls below 0.2; that outcome is reported and the gate metric reconsidered
+> openly - the tolerance is not lowered after seeing the number.
+
 ### Step 8 — The freeze ⚠️ **THE POINT OF NO RETURN**
 
 Run Stage B for every cell, then freeze. After this commit, `frozen/` is append-only
