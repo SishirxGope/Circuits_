@@ -5,69 +5,69 @@
 #   gemma2_2b greater_than: Gemma-2 has NO single-token two-digit string and tokenizes ' 1799' as 5 pieces (11 cells)
 #   llama32_1b greater_than: Llama-3.2 tokenizes ' 1799' as [' ', '179', '9'] - no century/year split (11 cells)
 
-stage=stageB model=pythia160m task=ioi compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
-stage=stageB model=pythia160m task=ioi compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
-stage=stageB model=pythia160m task=ioi compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia160m task=ioi compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia160m task=ioi compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia160m task=ioi compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia160m task=ioi compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia160m task=ioi compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia160m task=ioi compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia160m task=ioi compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia160m task=ioi compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia160m task=greater_than compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
-stage=stageB model=pythia160m task=greater_than compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
-stage=stageB model=pythia160m task=greater_than compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia160m task=greater_than compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia160m task=greater_than compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia160m task=greater_than compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia160m task=greater_than compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia160m task=greater_than compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia160m task=greater_than compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia160m task=greater_than compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia160m task=greater_than compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia410m task=ioi compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
-stage=stageB model=pythia410m task=ioi compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
-stage=stageB model=pythia410m task=ioi compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia410m task=ioi compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia410m task=ioi compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia410m task=ioi compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia410m task=ioi compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia410m task=ioi compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia410m task=ioi compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia410m task=ioi compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia410m task=ioi compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia410m task=greater_than compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
-stage=stageB model=pythia410m task=greater_than compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
-stage=stageB model=pythia410m task=greater_than compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia410m task=greater_than compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia410m task=greater_than compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=pythia410m task=greater_than compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia410m task=greater_than compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia410m task=greater_than compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=pythia410m task=greater_than compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=pythia410m task=greater_than compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=pythia410m task=greater_than compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=gemma2_2b task=ioi compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
-stage=stageB model=gemma2_2b task=ioi compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
-stage=stageB model=gemma2_2b task=ioi compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=gemma2_2b task=ioi compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=gemma2_2b task=ioi compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=gemma2_2b task=ioi compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=gemma2_2b task=ioi compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=gemma2_2b task=ioi compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=gemma2_2b task=ioi compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=gemma2_2b task=ioi compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=gemma2_2b task=ioi compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=llama32_1b task=ioi compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
-stage=stageB model=llama32_1b task=ioi compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
-stage=stageB model=llama32_1b task=ioi compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=llama32_1b task=ioi compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=llama32_1b task=ioi compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
-stage=stageB model=llama32_1b task=ioi compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=llama32_1b task=ioi compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=llama32_1b task=ioi compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
-stage=stageB model=llama32_1b task=ioi compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
-stage=stageB model=llama32_1b task=ioi compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
-stage=stageB model=llama32_1b task=ioi compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-rtn-int8 compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-rtn-int6 compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-rtn-int4 compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-gptq-int4 compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-awq-int4 compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-magnitude-20 compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-magnitude-40 compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-magnitude-60 compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-wanda-20 compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-wanda-40 compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia160m task=ioi setting=null-matchedmag-wanda-60 compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-rtn-int8 compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-rtn-int6 compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-rtn-int4 compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-gptq-int4 compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-awq-int4 compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-magnitude-20 compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-magnitude-40 compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-magnitude-60 compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-wanda-20 compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-wanda-40 compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia160m task=greater_than setting=null-matchedmag-wanda-60 compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-rtn-int8 compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-rtn-int6 compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-rtn-int4 compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-gptq-int4 compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-awq-int4 compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-magnitude-20 compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-magnitude-40 compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-magnitude-60 compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-wanda-20 compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-wanda-40 compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia410m task=ioi setting=null-matchedmag-wanda-60 compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-rtn-int8 compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-rtn-int6 compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-rtn-int4 compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-gptq-int4 compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-awq-int4 compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-magnitude-20 compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-magnitude-40 compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-magnitude-60 compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-wanda-20 compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-wanda-40 compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=pythia410m task=greater_than setting=null-matchedmag-wanda-60 compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-rtn-int8 compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-rtn-int6 compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-rtn-int4 compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-gptq-int4 compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-awq-int4 compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-magnitude-20 compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-magnitude-40 compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-magnitude-60 compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-wanda-20 compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-wanda-40 compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=gemma2_2b task=ioi setting=null-matchedmag-wanda-60 compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-rtn-int8 compression=rtn_int8 compression_family=rtn compression_level=8 +stage_c.cell=rtn_int8 +stage_c.compressor_kwargs.bits=8
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-rtn-int6 compression=rtn_int6 compression_family=rtn compression_level=6 +stage_c.cell=rtn_int6 +stage_c.compressor_kwargs.bits=6
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-rtn-int4 compression=rtn_int4 compression_family=rtn compression_level=4 +stage_c.cell=rtn_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-gptq-int4 compression=gptq_int4 compression_family=gptq compression_level=4 +stage_c.cell=gptq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-awq-int4 compression=awq_int4 compression_family=awq compression_level=4 +stage_c.cell=awq_int4 +stage_c.compressor_kwargs.bits=4
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-magnitude-20 compression=magnitude_20 compression_family=magnitude compression_level=0.2 +stage_c.cell=magnitude_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-magnitude-40 compression=magnitude_40 compression_family=magnitude compression_level=0.4 +stage_c.cell=magnitude_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-magnitude-60 compression=magnitude_60 compression_family=magnitude compression_level=0.6 +stage_c.cell=magnitude_60 +stage_c.compressor_kwargs.sparsity=0.6
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-wanda-20 compression=wanda_20 compression_family=wanda compression_level=0.2 +stage_c.cell=wanda_20 +stage_c.compressor_kwargs.sparsity=0.2
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-wanda-40 compression=wanda_40 compression_family=wanda compression_level=0.4 +stage_c.cell=wanda_40 +stage_c.compressor_kwargs.sparsity=0.4
+stage=stageB model=llama32_1b task=ioi setting=null-matchedmag-wanda-60 compression=wanda_60 compression_family=wanda compression_level=0.6 +stage_c.cell=wanda_60 +stage_c.compressor_kwargs.sparsity=0.6

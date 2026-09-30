@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # [AI-GEN] agent=Claude date=2026-09-21 task=Plan B step 5 - parallel cell runner (the Spark's real advantage)
+# modified: [AI-GEN] agent=Claude date=2026-09-30 task=stageA queue (the dense references) + RESULTS.md pointer
 #
 # Usage:
+#   ./05_run_queue.sh stageA 1                 # the 6 dense references (Stage A)
 #   ./05_run_queue.sh stageB 1                 # ALWAYS start with 1 and check one cell
 #   ./05_run_queue.sh stageB 8 pythia160m      # then scale, one model at a time
 #   ./05_run_queue.sh stageC 4 gemma2_2b
@@ -23,9 +25,10 @@ PAR="${2:-1}"
 FILTER="${3:-}"
 
 case "$STAGE" in
+  stageA) RUNNER="experiments/run_stage_a.py"; QUEUE="$HERE/cells_stagea.txt" ;;
   stageB) RUNNER="experiments/run_stage_b.py"; QUEUE="$HERE/cells_stageb.txt" ;;
   stageC) RUNNER="experiments/run_stage_c.py"; QUEUE="$HERE/cells_stagec.txt" ;;
-  *) echo "usage: $0 [stageB|stageC] [parallelism] [model-filter]"; exit 2 ;;
+  *) echo "usage: $0 [stageA|stageB|stageC] [parallelism] [model-filter]"; exit 2 ;;
 esac
 
 if ! "$PY" deploy/shared/preflight_blockers.py --quiet; then
@@ -62,5 +65,5 @@ printf '%s\n' "${CELLS[@]}" \
   || { echo ""; echo "One or more cells failed. Re-run: completed cells are skipped."; exit 1; }
 
 echo ""
-echo "$STAGE queue complete."
+echo "$STAGE queue complete. One timestamped row per cell was added to RESULTS.md."
 if [ "$STAGE" = "stageB" ]; then echo "NOTHING IS FROZEN YET - run 06_freeze.sh."; fi

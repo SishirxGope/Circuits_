@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 # [AI-GEN] agent=Claude date=2026-09-21 task=Plan B step 6 - THE FREEZE (irreversible)
+# modified: [AI-GEN] agent=Claude date=2026-09-30 task=optional model list for a deliberate per-model freeze
+#
+#   ./06_freeze.sh                    # every viable cell of the plan
+#   ./06_freeze.sh pythia160m         # only this model's 11 or 22 cells (append-only: later
+#                                     # models are frozen by later calls, never re-frozen)
 #
 # BEFORE RUNNING: confirm the freeze-ownership table in docs/HUMAN_DECISIONS.md says
 # THIS machine owns these cells. If the PC already froze them, copy that freeze across
 # and skip this script entirely. Two freezes of one cell cannot be reconciled afterwards.
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/_common.sh"
 CFG="$REPO/freeze_config_plan_b.json"
+MODELS=("$@")
+MODEL_ARGS=()
+if [ "${#MODELS[@]}" -gt 0 ]; then MODEL_ARGS=(--models "${MODELS[@]}"); fi
 
 echo "=== 1. Build the freeze config from completed Stage B runs ==="
-"$PY" deploy/shared/make_freeze_config.py --plan b --out "$CFG"
+"$PY" deploy/shared/make_freeze_config.py --plan b ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} --out "$CFG"
 
 echo ""
 echo "=== 2. DRY RUN - what would be frozen ==="
@@ -23,7 +31,7 @@ if [ "$answer" != "FREEZE" ]; then echo "Aborted. Nothing written."; exit 0; fi
 
 echo ""
 echo "=== 4. Freezing ==="
-"$PY" deploy/shared/make_freeze_config.py --plan b --out "$CFG" --approve
+"$PY" deploy/shared/make_freeze_config.py --plan b ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} --out "$CFG" --approve
 "$PY" experiments/freeze_stage_b.py --config "$CFG"
 
 echo ""

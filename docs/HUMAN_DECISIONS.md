@@ -184,6 +184,13 @@ counts as "reproduced"). Set the tolerance **before** you see your own number.
 > `data/reference/ioi_gpt2_small_edges.json`, regenerated with
 > `--min-precision 0.3 --max-p-value 0.001 --seed 5 --decided-on 2026-09-30` (the 0.2 file
 > is in git history at `3f549ee`).
+>
+> **RESULT 2026-09-30: the gate PASSED on seeds 5-9.** Spark run
+> `runs/20260930_stageA_gpt2-small_ioi_dense_B16xS5_seed5` (config_hash `a324db7b...`):
+> core band **51 edges, 37 of them in the reference**: precision **0.725** (criterion >= 0.3;
+> chance 0.03), hypergeometric **p = 1.27e-45** (criterion <= 0.001), Jaccard 0.038 (reported
+> only). Recall is 37/963 = 0.038. Pass record: `data/reference/ioi_gpt2_small_gate_pass.json`.
+> Preflight on the Spark: 10 of 10 OK.
 
 ### Step 8 — The freeze ⚠️ **THE POINT OF NO RETURN**
 

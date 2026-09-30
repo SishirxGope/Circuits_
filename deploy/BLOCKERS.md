@@ -9,8 +9,8 @@ a real model and it raises `NotImplementedError`. The deployment scripts in
 start, rather than failing four hours into a queue at night.
 
 Current state (2026-09-30): **all engineering is done.** On
-the Spark, once this code is pulled, the expected result is **1 of 10 blocked: B6**, which
-waits on one gate run (seeds 5-9, the PI's new criterion), not on code. On a machine without
+the Spark the preflight reads **10 of 10 OK** (2026-09-30, after B6 passed; its pass record
+is committed, so a fresh clone reads the same once its calibration caches match). On a machine without
 the calibration caches Q7 also reads BLOCKED: it is data, and reads OK only where the caches
 match `deploy/shared/calibration_fingerprints.json`.
 
@@ -28,7 +28,7 @@ summary and can drift.
 | Q7 | Calibration caches (Wanda, GPTQ, AWQ) | **DONE on the Spark** 2026-09-29 — fineweb-edu @ `87f09149…`, fingerprints recorded in `deploy/shared/calibration_fingerprints.json` | data |
 | B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
-| B6 | GPT-2 IOI exit gate | Engineering **DONE** 2026-09-30. Jaccard gate FAILED (0.028, size-capped); PI replaced it with precision >= 0.3 + p <= 0.001 on seeds 5-9. BLOCKED on that gate run on the Spark | Spark run |
+| B6 | GPT-2 IOI exit gate | **PASSED** 2026-09-30 on seeds 5-9: precision 0.725 (>= 0.3), p 1.27e-45 (<= 0.001). The earlier Jaccard gate failed (0.028, size-capped) and was replaced post-hoc (HUMAN_DECISIONS.md Step 7) | - |
 
 **Wanda is unblocked on the Spark: code and data.** The four caches were built 2026-09-29
 (fineweb-edu `sample-10BT` @ `87f09149ef4734204d70ed1d046ddc9ca3f2b8f9`, 300k tokens,

@@ -1,4 +1,5 @@
 # [AI-GEN] agent=Claude date=2026-09-21 task=Build the resolved freeze config from completed Stage B runs
+# modified: [AI-GEN] agent=Claude date=2026-09-30 task=viable pairs only, model names from configs, --models for a deliberate per-model freeze
 # reviewed-by: PENDING
 #
 # experiments/freeze_stage_b.py takes --config <resolved config JSON> and reads
@@ -16,6 +17,10 @@
 # Usage:
 #   python deploy/shared/make_freeze_config.py --plan a --out freeze_config.json
 #   python deploy/shared/make_freeze_config.py --plan a --out f.json --approve   # sets the flag
+#   python deploy/shared/make_freeze_config.py --plan b --models pythia160m --out f.json
+#       # freeze ONE model's cells. Protocol rule 1 is per cell (a cell's null is frozen
+#       # before THAT cell's Stage C runs), so freezing model by model is allowed - but it
+#       # is a deliberate, named narrowing, never a silent partial grid.
 
 from __future__ import annotations
 
@@ -28,16 +33,25 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from gen_cells import CELLS, PLAN_A_MODELS, PLAN_B_MODELS, TASKS  # noqa: E402
+from gen_cells import CELLS, PLAN_A_MODELS, PLAN_B_MODELS, viable_pairs
 
-# Run-name model tokens differ from config file names (configs/model/pythia160m.yaml
-# carries `name: pythia-160m`), so map explicitly rather than guessing.
-MODEL_NAME = {
-    "pythia160m": "pythia-160m",
-    "pythia410m": "pythia-410m",
-    "gemma2_2b": "gemma2-2b",
-    "llama32_1b": "llama32-1b",
-}
+
+def model_name(model_cfg: str) -> str:
+    """The model's ``name:`` from configs/model/<model_cfg>.yaml.
+
+    Stage C looks for its null at frozen/{model.name}/{task}/{cell}, so the freeze must
+    file it under exactly that name. This was a hand-typed map that said "gemma2-2b" and
+    "llama32-1b" where the configs say "gemma-2-2b" and "llama-3.2-1b": both primaries'
+    nulls would have been frozen where Stage C never looks.
+    """
+    path = REPO / "configs" / "model" / f"{model_cfg}.yaml"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("name:"):
+            return line.split(":", 1)[1].split("#", 1)[0].strip()
+    raise ValueError(f"{path} has no top-level name:")
+
+
+MODEL_NAME = {m: model_name(m) for m in PLAN_B_MODELS}
 
 
 def find_stage_b_runs(run_root: Path) -> list[Path]:
@@ -73,37 +87,47 @@ def match_run(runs: list[Path], model_cfg: str, task: str, cell: str) -> list[Pa
     return out
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--plan", choices=["a", "b"], default="a")
     ap.add_argument("--out", required=True)
     ap.add_argument("--approve", action="store_true",
                     help="set stage_b.freeze_approved=true (the pre-registration act)")
     ap.add_argument("--run-root", default="runs")
-    args = ap.parse_args()
+    ap.add_argument("--models", nargs="+", default=None,
+                    help="freeze only these models' cells (a deliberate per-model freeze)")
+    args = ap.parse_args(argv)
 
     models = PLAN_A_MODELS if args.plan == "a" else PLAN_B_MODELS
+    if args.models:
+        unknown = sorted(set(args.models) - set(models))
+        if unknown:
+            print(f"--models {unknown} are not in plan {args.plan}: {models}")
+            return 2
+        models = [m for m in models if m in args.models]
     runs = find_stage_b_runs(REPO / args.run_root)
     print(f"found {len(runs)} Stage B run directories under {args.run_root}/")
 
     cells_out, missing, ambiguous = [], [], []
-    for model in models:
-        for task in TASKS:
-            for c in CELLS:
-                hits = match_run(runs, model, task, c["cell"])
-                if not hits:
-                    missing.append(f"{model}/{task}/{c['cell']}")
-                elif len(hits) > 1:
-                    ambiguous.append(f"{model}/{task}/{c['cell']} -> {[h.name for h in hits]}")
-                else:
-                    cells_out.append({
-                        "model": MODEL_NAME.get(model, model),
-                        "task": task,
-                        "cell": c["cell"],
-                        "source_run_dir": str(hits[0]),
-                    })
+    # Viable pairs only: the greater_than cells Gemma-2 and Llama-3.2 cannot run are never
+    # queued, so counting them made every Plan B freeze config "MISSING" 22 cells.
+    pairs = viable_pairs(models)
+    for model, task in pairs:
+        for c in CELLS:
+            hits = match_run(runs, model, task, c["cell"])
+            if not hits:
+                missing.append(f"{model}/{task}/{c['cell']}")
+            elif len(hits) > 1:
+                ambiguous.append(f"{model}/{task}/{c['cell']} -> {[h.name for h in hits]}")
+            else:
+                cells_out.append({
+                    "model": MODEL_NAME.get(model, model),
+                    "task": task,
+                    "cell": c["cell"],
+                    "source_run_dir": str(hits[0]),
+                })
 
-    expected = len(models) * len(TASKS) * len(CELLS)
+    expected = len(pairs) * len(CELLS)
     print(f"matched {len(cells_out)} / {expected} cells")
 
     if missing:
