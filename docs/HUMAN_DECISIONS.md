@@ -487,6 +487,29 @@ Stage A once on Pythia-160M, time it, then:
 **Current provisional value:** synthetic/dry-run B=4, S=2, R=3. The B=16/S=5/R=20
 pilot is **proposed, not approved**. Status: **PROVISIONAL**.
 
+> **Q3 RE-APPLIED ON THE DGX SPARK, 2026-10-01 — PROPOSED; binding when the PI commits it.**
+> The pre-stated rule (t ≤ 2 min → S = 5, R = 20; 2 < t ≤ 6 min → S = 5, R = 10; t > 6 min →
+> S = 3, R = 10), applied unchanged to one attribution pass measured on the Spark
+> (`04_timing.sh`, 300 prompts, 2 seeds, non-evidence; reports under `runs/pilot_timing/`):
+>
+> | Model (dtype) | Task | t per pass | Rule gives | Stage B per cell | 11 cells, serial |
+> |---|---|---|---|---|---|
+> | Pythia-160M | IOI / greater-than | 20.0 s / 10.2 s | S = 5, R = 20 | 35.1 / 18.0 min | 9.7 h (both tasks) |
+> | Pythia-410M | IOI / greater-than | 101.4 s / 61.5 s | S = 5, R = 20 | 178.5 / 108.6 min | 52.6 h (both tasks) |
+> | Llama-3.2-1B (bf16) | IOI | 52.2 s | S = 5, R = 20 | 93.3 min | 17.1 h |
+> | Gemma-2-2B (float32) | IOI | 290.3 s | **S = 5, R = 10** | 266 min | 48.8 h |
+>
+> B = 16 throughout (re-pruning one attribution costs ~0.015–0.07 s per view). Gemma's R = 10
+> is carried into its Stage B and Stage C queue lines as `nulls.R=10` by
+> `deploy/shared/gen_cells.py::MODEL_NULL_R`, so its run names read `B16xS5xR10`. Pythia-410M
+> IOI (101 s) is under the 2-minute line by 19 s; the rule is applied as written, not
+> re-judged near its edge.
+>
+> **Gemma-2-2B is NOT cleared to run by this.** Its clean IOI metric in the same pilot was
+> −4.33 / −4.69 (logit IO − S; Llama +4.97, Pythia-160M +4.56): on the pre-registered no-BOS
+> prompts it prefers the wrong name. The BOS question is decided separately, after
+> `deploy/shared/check_task_behaviour.py`, and before any Gemma run.
+
 ---
 
 ### Q5 — HuggingFace revision pins  **RESOLVED 2026-09-12** (one PI action left)

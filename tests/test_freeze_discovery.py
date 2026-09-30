@@ -105,6 +105,15 @@ class TestTheStageBQueue:
             names[name] = line
         assert len(names) == len(_rows(QUEUE_B)) == 66, "two cells would share one run name"
 
+    def test_each_model_gets_the_r_the_q3_rule_gave_it(self, freeze_cfg):
+        """HUMAN_DECISIONS.md Q3, 2026-10-01: Gemma-2-2B R = 10, every other model R = 20."""
+        pytest.importorskip("hydra")
+        for line in _rows(QUEUE_B):
+            resolved = _compose(line)
+            expected = 10 if "model=gemma2_2b " in line else 20
+            assert resolved["nulls"]["R"] == expected, line
+            assert f"xR{expected}_" in _stage_b_run_name(resolved)
+
     def test_the_stage_a_queue_is_one_dense_reference_per_viable_pair(self):
         pytest.importorskip("hydra")
         rows = _rows(QUEUE_A)

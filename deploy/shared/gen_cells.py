@@ -1,5 +1,6 @@
 # [AI-GEN] agent=Claude date=2026-09-21 task=Generate the compression grid configs and the Stage B/C run queues from one cell table
 # modified: [AI-GEN] agent=Claude date=2026-09-30 task=per-cell run-name setting (freeze discovery) + Stage A queue
+# modified: [AI-GEN] agent=Claude date=2026-10-01 task=per-model R from the Q3 rule on Spark timings
 # reviewed-by: PENDING
 #
 # WHY THIS EXISTS
@@ -47,6 +48,14 @@ CELLS: list[dict] = [
 # Model/task coverage. Plan A = pythia only; Plan B = everything.
 PLAN_A_MODELS = ["pythia160m", "pythia410m"]
 PLAN_B_MODELS = ["pythia160m", "pythia410m", "gemma2_2b", "llama32_1b"]
+
+# Null draws R where the Q3 rule, applied to the measured Spark timings, departs from
+# configs/nulls/default.yaml (R = 20). docs/HUMAN_DECISIONS.md Q3, 2026-10-01: one IOI
+# attribution pass on Gemma-2-2B takes 290 s (2 min < t <= 6 min -> S = 5, R = 10); every
+# other model is under 2 min (R = 20). Emitted as `nulls.R=<R>` on that model's Stage B AND
+# Stage C lines, so the run name (B16xS5xR10) and the Stage C tags carry the R of the frozen
+# null. Changing this after a model's freeze means re-running its Stage B (AI_RULES.md 1.3).
+MODEL_NULL_R: dict[str, int] = {"gemma2_2b": 10}
 TASKS = ["ioi", "greater_than"]
 
 # (model, task) pairs that CANNOT run, with the reason. These are properties of the
@@ -142,6 +151,8 @@ def _overrides(model: str, task: str, c: dict, stage: str) -> str:
         f"+stage_c.cell={c['cell']} "
         + " ".join(f"+stage_c.compressor_kwargs.{k}={v}" for k, v in c["kwargs"].items())
     )
+    if model in MODEL_NULL_R:
+        common += f" nulls.R={MODEL_NULL_R[model]}"
     return f"stage={stage} {common}"
 
 
