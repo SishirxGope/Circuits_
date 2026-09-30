@@ -352,9 +352,10 @@ def check_exit_gate(
 
     Reads the record the gate writes when it passes
     (tests/test_regression_ioi_gpt2_small.py) and checks it was earned against the PI's
-    reference file as it is NOW (sha256), at or above the PI's tolerance. The previous
-    check searched the test file for the word "skip", which the file always contains
-    (its skip condition is permanent code), so B6 could never have read OK.
+    reference file as it is NOW (sha256), meeting the PI's criterion (precision and
+    hypergeometric p). The previous check searched the test file for the word "skip",
+    which the file always contains (its skip condition is permanent code), so B6 could
+    never have read OK.
     """
     import hashlib
     import json
@@ -365,21 +366,27 @@ def check_exit_gate(
     if not reference.exists():
         return label, False, (
             "no PI reference file data/reference/ioi_gpt2_small_edges.json "
-            "(edges + tolerance, PI-owned; docs/HUMAN_DECISIONS.md Step 7)"
+            "(edges + criterion, PI-owned; docs/HUMAN_DECISIONS.md Step 7)"
         )
     if not record.exists():
         return label, False, "PI reference present, but the gate has not passed on it yet"
     try:
         result = json.loads(record.read_text(encoding="utf-8"))
-        tolerance = float(json.loads(reference.read_text(encoding="utf-8"))["tolerance"])
-        jaccard = float(result["jaccard"])
+        crit = json.loads(reference.read_text(encoding="utf-8"))["criterion"]
+        min_precision, max_p = float(crit["min_precision"]), float(crit["max_p_value"])
+        prec, p_value = float(result["precision"]), float(result["p_value"])
     except Exception as exc:  # noqa: BLE001 - an unreadable record opens nothing
         return label, False, f"cannot read the gate record: {type(exc).__name__}: {exc}"
     if result.get("reference_sha256") != hashlib.sha256(reference.read_bytes()).hexdigest():
         return label, False, "the gate passed on a different reference file; re-run it"
-    if result.get("passed") is not True or not jaccard >= tolerance:
-        return label, False, f"recorded Jaccard {jaccard:.3f} is below the tolerance {tolerance}"
-    return label, True, f"passed {result.get('date')}: Jaccard {jaccard:.3f} >= {tolerance}"
+    if result.get("passed") is not True or not (prec >= min_precision and p_value <= max_p):
+        return label, False, (
+            f"recorded precision {prec:.3f} / p {p_value:.3g} does not meet the criterion "
+            f"(precision >= {min_precision}, p <= {max_p})"
+        )
+    return label, True, (
+        f"passed {result.get('date')}: precision {prec:.3f} >= {min_precision}, p {p_value:.3g} <= {max_p}"
+    )
 
 
 def main() -> int:
@@ -402,7 +409,7 @@ def main() -> int:
     if blocked:
         print(f"REFUSING TO RUN SCIENCE: {len(blocked)} of {len(results)} blockers unimplemented.")
         print("Each is an engineering gap, missing calibration data, or a PI-owned input")
-        print("(B6's reference edges and tolerance) - not a configuration problem.")
+        print("(B6's reference edges and criterion) - not a configuration problem.")
         print("deploy/BLOCKERS.md has the specification for each.")
         return 1
 

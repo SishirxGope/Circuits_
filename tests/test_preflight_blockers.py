@@ -268,7 +268,11 @@ class TestExitGate:
     The old check grepped the test file for "skip", which it always contains, so B6 could
     never have opened - a permanent false BLOCKED."""
 
-    REFERENCE: ClassVar[dict] = {"edges": ["a->b", "b->c"], "tolerance": 0.8, "source": "x", "decided_on": "2026-10-01"}
+    REFERENCE: ClassVar[dict] = {
+        "edges": ["a->b", "b->c"], "source": "x", "decided_on": "2026-10-01",
+        "criterion": {"min_precision": 0.3, "max_p_value": 0.001, "seed": 5},
+    }
+    PASS: ClassVar[dict] = {"passed": True, "precision": 0.73, "p_value": 1e-30, "date": "2026-10-02"}
 
     def _files(self, tmp_path, *, record=None, reference=None):
         import hashlib
@@ -284,7 +288,7 @@ class TestExitGate:
 
     def test_no_reference_file_blocks_and_says_it_is_the_pis(self, preflight, tmp_path):
         _, ok, detail = preflight.check_exit_gate(tmp_path / "absent.json", tmp_path / "pass.json")
-        assert ok is False and "PI" in detail and "tolerance" in detail
+        assert ok is False and "PI" in detail and "criterion" in detail
 
     def test_a_reference_without_a_pass_blocks(self, preflight, tmp_path):
         ref, rec = self._files(tmp_path)
@@ -292,20 +296,26 @@ class TestExitGate:
         assert ok is False and "has not passed" in detail
 
     def test_a_pass_on_the_current_reference_opens_it(self, preflight, tmp_path):
-        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.85, "date": "2026-10-02"})
+        ref, rec = self._files(tmp_path, record=self.PASS)
         _, ok, detail = preflight.check_exit_gate(ref, rec)
-        assert ok is True and "0.850 >= 0.8" in detail
+        assert ok is True and "precision 0.730 >= 0.3" in detail and "<= 0.001" in detail
 
     def test_a_pass_on_an_edited_reference_blocks(self, preflight, tmp_path):
-        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.85})
-        ref.write_text(ref.read_text(encoding="utf-8").replace("0.8", "0.5"), encoding="utf-8")
+        ref, rec = self._files(tmp_path, record=self.PASS)
+        ref.write_text(ref.read_text(encoding="utf-8").replace("0.3", "0.2"), encoding="utf-8")
         _, ok, detail = preflight.check_exit_gate(ref, rec)
         assert ok is False and "different reference" in detail
 
-    def test_a_record_below_the_tolerance_blocks(self, preflight, tmp_path):
-        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.5})
+    @pytest.mark.parametrize("change", [{"precision": 0.2}, {"p_value": 0.01}, {"passed": False}])
+    def test_a_record_that_misses_the_criterion_blocks(self, preflight, tmp_path, change):
+        ref, rec = self._files(tmp_path, record={**self.PASS, **change})
         _, ok, detail = preflight.check_exit_gate(ref, rec)
-        assert ok is False and "below the tolerance" in detail
+        assert ok is False and "does not meet the criterion" in detail
+
+    def test_a_record_from_the_superseded_jaccard_gate_blocks(self, preflight, tmp_path):
+        ref, rec = self._files(tmp_path, record={"passed": True, "jaccard": 0.85})
+        _, ok, _ = preflight.check_exit_gate(ref, rec)
+        assert ok is False
 
     def test_a_malformed_record_blocks(self, preflight, tmp_path):
         ref, rec = self._files(tmp_path, record={"passed": True})

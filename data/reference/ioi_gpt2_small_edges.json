@@ -964,7 +964,11 @@
     "L9.MLP->L11.MLP",
     "L9.MLP->LOGIT"
   ],
-  "tolerance": 0.2,
+  "criterion": {
+    "min_precision": 0.3,
+    "max_p_value": 0.001,
+    "seed": 5
+  },
   "source": "Wang et al., ICLR 2023 (arXiv:2211.00593) IOI circuit, as the edge-level ground truth of ACDC (Conmy et al., NeurIPS 2023): acdc/ioi/utils.py::get_ioi_true_edges @ bc99ace817974b5584b7ee203d596a8e2bbcd399, ported to dense-node edge ids by src/tasks/ioi_reference.py",
   "decided_on": "2026-09-30",
   "n_edges": 963,

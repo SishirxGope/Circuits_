@@ -163,6 +163,28 @@ counts as "reproduced"). Set the tolerance **before** you see your own number.
 > possible Jaccard falls below 0.2; that outcome is reported and the gate metric reconsidered
 > openly - the tolerance is not lowered after seeing the number.
 
+> **RESULT 2026-09-30: the Jaccard gate FAILED - 0.028 against 0.2.** Spark run
+> `runs/20260930_stageA_gpt2-small_ioi_dense_B16xS5_seed0` (seeds 0-4): the core band had
+> **37 edges, 27 of them in the 963-edge reference**. The accepted risk above happened: a
+> 37-edge set cannot exceed a Jaccard of 37/963 = 0.038, so the metric could not pass however
+> correct the edges were. The same numbers are a precision of 27/37 = 0.73 against a chance
+> rate of 963/32,491 = 0.03, and a recall of 27/963 = 0.028.
+>
+> **SUPERSEDED 2026-09-30 (PI), AFTER seeing that result - post-hoc, and disclosed as such:**
+> the gate is now **precision >= 0.3 AND hypergeometric p <= 0.001** (the chance that a
+> random edge set of the core band's size shares at least as many edges with the reference;
+> universe 32,491, reference 963), run on **fresh seeds 5-9** (`seed=5`) so that the new
+> criterion is not scored on the run that motivated it. Seeds 0-4 are not re-used for the
+> gate. Rationale: the question the gate asks is "does the stack find the published circuit
+> rather than noise", which precision against chance answers regardless of the core band's
+> size; recall is not asked of a core band by design (it keeps only edges present in every
+> ensemble member). 0.3 is ~10x the chance precision, the same margin the Jaccard 0.2 was
+> meant to have. Jaccard is still computed and reported, not gated. The paper must report
+> the failed Jaccard run, this change, and that it was made after seeing the result. File:
+> `data/reference/ioi_gpt2_small_edges.json`, regenerated with
+> `--min-precision 0.3 --max-p-value 0.001 --seed 5 --decided-on 2026-09-30` (the 0.2 file
+> is in git history at `3f549ee`).
+
 ### Step 8 — The freeze ⚠️ **THE POINT OF NO RETURN**
 
 Run Stage B for every cell, then freeze. After this commit, `frozen/` is append-only

@@ -106,27 +106,40 @@ class TestTheReferenceFile:
     def test_it_writes_a_file_the_gate_accepts(self, tmp_path):
         from test_regression_ioi_gpt2_small import load_reference
 
-        code, out = self._write(tmp_path, "--tolerance", "0.5", "--decided-on", "2026-10-01")
+        code, out = self._write(tmp_path, *self.ARGS)
         assert code == 0
-        edges, tolerance = load_reference(out)
-        assert edges == ioi_reference_edges() and tolerance == 0.5
+        edges, crit = load_reference(out)
+        assert edges == ioi_reference_edges()
+        assert crit == {"min_precision": 0.3, "max_p_value": 0.001, "seed": 5}
         assert json.loads(out.read_text(encoding="utf-8"))["source"] == SOURCE
 
-    def test_there_is_no_default_tolerance(self, tmp_path):
-        with pytest.raises(SystemExit):
-            self._write(tmp_path, "--decided-on", "2026-10-01")
+    ARGS = ("--min-precision", "0.3", "--max-p-value", "0.001", "--seed", "5", "--decided-on", "2026-10-01")
 
-    @pytest.mark.parametrize("tolerance", ["0", "-0.2", "1.5"])
-    def test_the_tolerance_must_be_a_jaccard(self, tmp_path, tolerance):
-        code, out = self._write(tmp_path, "--tolerance", tolerance, "--decided-on", "2026-10-01")
+    @pytest.mark.parametrize("flag", ["--min-precision", "--max-p-value", "--seed"])
+    def test_there_are_no_defaults(self, tmp_path, flag):
+        args = list(self.ARGS)
+        i = args.index(flag)
+        del args[i:i + 2]
+        with pytest.raises(SystemExit):
+            self._write(tmp_path, *args)
+
+    @pytest.mark.parametrize("flag,value", [
+        ("--min-precision", "0"), ("--min-precision", "1.5"),
+        ("--max-p-value", "0"), ("--max-p-value", "1"), ("--seed", "-1"),
+    ])
+    def test_the_criterion_is_range_checked(self, tmp_path, flag, value):
+        args = list(self.ARGS)
+        args[args.index(flag) + 1] = value
+        code, out = self._write(tmp_path, *args)
         assert code == 1 and not out.exists()
 
     def test_the_date_must_be_iso(self, tmp_path):
-        code, out = self._write(tmp_path, "--tolerance", "0.5", "--decided-on", "1 Oct")
+        args = [*self.ARGS[:-1], "1 Oct"]
+        code, out = self._write(tmp_path, *args)
         assert code == 1 and not out.exists()
 
     def test_an_existing_file_is_never_overwritten(self, tmp_path):
         out = tmp_path / "ref.json"
         out.write_text("{}", encoding="utf-8")
-        assert make_ioi_reference.main(["--tolerance", "0.5", "--decided-on", "2026-10-01"], out=out) == 1
+        assert make_ioi_reference.main(list(self.ARGS), out=out) == 1
         assert out.read_text(encoding="utf-8") == "{}"

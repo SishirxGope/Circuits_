@@ -8,9 +8,9 @@ a real model and it raises `NotImplementedError`. The deployment scripts in
 `plan_a_local_pc/` and `plan_b_dgx_spark/` therefore call the preflight first and refuse to
 start, rather than failing four hours into a queue at night.
 
-Current state (2026-09-29): **all engineering is done except B6's extraction wiring.** On
+Current state (2026-09-30): **all engineering is done.** On
 the Spark, once this code is pulled, the expected result is **1 of 10 blocked: B6**, which
-waits on a PI input (reference edges + tolerance), not on code alone. On a machine without
+waits on one gate run (seeds 5-9, the PI's new criterion), not on code. On a machine without
 the calibration caches Q7 also reads BLOCKED: it is data, and reads OK only where the caches
 match `deploy/shared/calibration_fingerprints.json`.
 
@@ -28,7 +28,7 @@ summary and can drift.
 | Q7 | Calibration caches (Wanda, GPTQ, AWQ) | **DONE on the Spark** 2026-09-29 — fineweb-edu @ `87f09149…`, fingerprints recorded in `deploy/shared/calibration_fingerprints.json` | data |
 | B3 | Chance-floor universe | **DONE** — `run_stage_c.py::_chance_floor_universes`, structural and per-level, 2026-09-27 | 🔒 novelty |
 | B4 | Normalised L1 | **DONE** — `distances.py::normalized_l1_distance`, approved 2026-09-12 | 🔒 novelty |
-| B6 | GPT-2 IOI exit gate | Engineering **DONE** 2026-09-30 (reference edges derived, extraction wired). BLOCKED on **your tolerance** only, then one gate run on the Spark | PI input |
+| B6 | GPT-2 IOI exit gate | Engineering **DONE** 2026-09-30. Jaccard gate FAILED (0.028, size-capped); PI replaced it with precision >= 0.3 + p <= 0.001 on seeds 5-9. BLOCKED on that gate run on the Spark | Spark run |
 
 **Wanda is unblocked on the Spark: code and data.** The four caches were built 2026-09-29
 (fineweb-edu `sample-10BT` @ `87f09149ef4734204d70ed1d046ddc9ca3f2b8f9`, 300k tokens,
@@ -185,7 +185,7 @@ reference. Without it, a null result is indistinguishable from a broken extracto
 **What opens B6 (changed 2026-09-29).** The preflight used to search the test file for the
 word "skip", which the file always contains, so B6 could never have read OK. It now reads
 the record the gate writes when it passes (`data/reference/ioi_gpt2_small_gate_pass.json`)
-and checks it against the reference file's current sha256 and your tolerance.
+and checks it against the reference file's current sha256 and your criterion.
 
 **Done (engineering, 2026-09-30):**
 
@@ -200,19 +200,23 @@ and checks it against the reference file's current sha256 and your tolerance.
   (`GATE_OVERRIDES` = `_run_one.sh`'s overrides + model + task, held equal by a test):
   dense-node EAP, B=16 x S=5, 300 prompts. The extracted set is that run's **core band**.
 
-**What it still needs, in order:**
+**Criterion (PI-owned, HUMAN_DECISIONS.md Step 7).** The first criterion, Jaccard >= 0.2
+on seeds 0-4, FAILED at 0.028: the core band had 37 edges (27 in the reference), and 37
+edges cannot exceed a Jaccard of 37/963. The PI replaced it the same day, post-hoc and
+disclosed: **precision >= 0.3 AND hypergeometric p <= 0.001, on fresh seeds 5-9**. The
+file carries it:
 
-1. **From you (PI-owned, AI_RULES 2.2): the tolerance** - the Jaccard the core band must
-   reach. Decide it before anyone sees a gate number (HUMAN_DECISIONS.md Step 7), then:
+    python deploy/shared/make_ioi_reference.py --min-precision 0.3 --max-p-value 0.001 \
+        --seed 5 --decided-on 2026-09-30
 
-       python deploy/shared/make_ioi_reference.py --tolerance <T> --decided-on YYYY-MM-DD
+The script has no defaults and will not overwrite an existing file. A file in the old
+Jaccard format is refused by the gate.
 
-   and **commit** `data/reference/ioi_gpt2_small_edges.json` - the commit is the
-   pre-registration. The script has no default and will not overwrite an existing file.
-2. **On the Spark:** `RUN_IOI_GPT2_REFERENCE=1 python -m pytest tests/test_regression_ioi_gpt2_small.py -s`.
-   It downloads GPT-2 small at the pin, runs Stage A under `runs/`, prints the Jaccard, and
-   on a pass writes the record that opens B6. Each gate run deletes the previous record
-   before it extracts anything, so a later failing run closes B6 again.
+**What it still needs:** on the Spark,
+`RUN_IOI_GPT2_REFERENCE=1 python -m pytest tests/test_regression_ioi_gpt2_small.py -s`.
+It runs Stage A on seeds 5-9 under `runs/`, prints precision, p, core size, shared edges and
+Jaccard, and on a pass writes the record that opens B6. Each gate run deletes the previous
+record before it extracts anything, so a later failing run closes B6 again.
 
 Fixed on the way: the test looked for the reference file one directory *above* the repo,
 so a file placed in `data/reference/` would never have been found.
