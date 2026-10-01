@@ -2,8 +2,8 @@
 # [AI-GEN] agent=Claude date=2026-09-21 task=Plan B step 6 - THE FREEZE (irreversible)
 # modified: [AI-GEN] agent=Claude date=2026-09-30 task=optional model list for a deliberate per-model freeze
 #
-#   ./06_freeze.sh                    # every viable cell of the plan
-#   ./06_freeze.sh pythia160m         # only this model's 11 or 22 cells (append-only: later
+#   bash deploy/plan_b_dgx_spark/06_freeze.sh                    # every viable cell of the plan
+#   bash deploy/plan_b_dgx_spark/06_freeze.sh pythia160m         # only this model's 11 or 22 cells (append-only: later
 #                                     # models are frozen by later calls, never re-frozen)
 #
 # BEFORE RUNNING: confirm the freeze-ownership table in docs/HUMAN_DECISIONS.md says

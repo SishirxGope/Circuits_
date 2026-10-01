@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # [AI-GEN] agent=Claude date=2026-09-21 task=Plan B step 5 - parallel cell runner (the Spark's real advantage)
 # modified: [AI-GEN] agent=Claude date=2026-09-30 task=stageA queue (the dense references) + RESULTS.md pointer
+# modified: [AI-GEN] agent=Claude date=2026-10-01 task=run _run_one.sh through bash (scripts carry no execute bit)
 #
-# Usage:
-#   ./05_run_queue.sh stageA 1                 # the 6 dense references (Stage A)
-#   ./05_run_queue.sh stageB 1                 # ALWAYS start with 1 and check one cell
-#   ./05_run_queue.sh stageB 8 pythia160m      # then scale, one model at a time
-#   ./05_run_queue.sh stageC 4 gemma2_2b
+# Usage (from the repo root; always through bash - the scripts are not marked executable):
+#   bash deploy/plan_b_dgx_spark/05_run_queue.sh stageA 1               # the 6 dense references
+#   bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 1 "<filter>"    # ALWAYS one cell first
+#   bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 4 pythia160m    # then one model at a time
+#   bash deploy/plan_b_dgx_spark/05_run_queue.sh stageC 4 gemma2_2b
 #
 # CONCURRENCY IS PER-MODEL, because peak memory is per-model. Pythia-160M peaked at
 # 4.26 GiB (IOI) on the 4060; Gemma-2-2B is estimated near 25 GiB. Reusing one -P value
@@ -60,8 +61,11 @@ if [ "$PAR" -gt 1 ]; then
 fi
 echo ""
 
+# `bash _run_one.sh`, not `_run_one.sh`: xargs exec()s its command, which needs the execute
+# bit, and every .sh in this repo is committed from Windows as mode 100644. The first real
+# Stage A on the Spark (2026-10-01) died here with "Permission denied" before any cell ran.
 printf '%s\n' "${CELLS[@]}" \
-  | xargs -P "$PAR" -I {} "$HERE/_run_one.sh" "$RUNNER" "$LOG" "{}" \
+  | xargs -P "$PAR" -I {} bash "$HERE/_run_one.sh" "$RUNNER" "$LOG" "{}" \
   || { echo ""; echo "One or more cells failed. Re-run: completed cells are skipped."; exit 1; }
 
 echo ""

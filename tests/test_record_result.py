@@ -176,3 +176,16 @@ class TestTheCellRunner:
         assert 'grep -q "^$DONE_MARK"' in script
         assert 'grep -qE "run_dir' not in script
         assert "record_result.py --log" in script and "record_result.py --failed" in script
+
+    def test_no_script_is_executed_without_bash(self):
+        """Every .sh is committed from Windows as mode 100644, so a script run directly (as
+        xargs ran _run_one.sh) dies with "Permission denied" on Linux. That killed the first
+        Stage A on the Spark, 2026-10-01. Scripts must be invoked as `bash <script>.sh`."""
+        direct = re.compile(r'(?<!bash )(?<!source )(?<!bash ")(?<!source ")\$HERE/\w+\.sh')
+        offenders = []
+        for path in sorted((REPO / "deploy" / "plan_b_dgx_spark").glob("*.sh")):
+            for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                code = line.split("#", 1)[0] if not line.lstrip().startswith("#") else ""
+                if direct.search(code):
+                    offenders.append(f"{path.name}:{n}: {line.strip()}")
+        assert not offenders, offenders

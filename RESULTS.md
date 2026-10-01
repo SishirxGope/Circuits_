@@ -46,6 +46,7 @@ Times were not recorded for the entries before this file existed; they carry the
 | 2026-10-01T01:38:52+05:30 | Behaviour check, Pythia-410M, seed 0, n=300 | IOI: no BOS (pre-registered) 3.769 / −0.109; BOS 4.231 / −0.157. greater-than: no BOS (pre-registered) 0.910 / −0.707; BOS 0.934 / −0.673. Does both tasks either way | same file | non-evidence (check) |
 | 2026-10-01T01:38:52+05:30 | Behaviour check, Gemma-2-2B, IOI, seed 0, n=300 | **no BOS (pre-registered): −4.326 / −0.164, DOES NOT do the task**; BOS: 5.311 / −0.170, does the task | same file | non-evidence (check); blocks Gemma until the PI decides BOS |
 | 2026-10-01T01:38:52+05:30 | Behaviour check, Llama-3.2-1B, IOI, seed 0, n=300 | no BOS (pre-registered) 4.972 / −0.010; BOS 5.499 / −0.009. Does the task either way | same file | non-evidence (check) |
+| 2026-10-01 (time not recorded) | First Stage A launch on the Spark (`05_run_queue.sh stageA 1 "pythia160m task=greater_than"`) | **Did not start**: `xargs: _run_one.sh: Permission denied`. The .sh files are committed without the execute bit. No cell ran and no run directory was created. Fixed: `05_run_queue.sh` now runs `bash _run_one.sh`; covered by `tests/test_record_result.py::test_no_script_is_executed_without_bash` | Spark terminal output | engineering failure (no result) |
 
 ---
 

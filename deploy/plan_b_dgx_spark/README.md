@@ -37,8 +37,8 @@ files.
 
 ```bash
 tmux new -s cuc
-./deploy/plan_b_dgx_spark/RUN_ALL.sh 1                 # careful first pass
-./deploy/plan_b_dgx_spark/RUN_ALL.sh 12 pythia160m     # then scale, per model
+bash deploy/plan_b_dgx_spark/RUN_ALL.sh 1                 # careful first pass
+bash deploy/plan_b_dgx_spark/RUN_ALL.sh 12 pythia160m     # then scale, per model
 ```
 
 Runs every step below in order and is **resumable** — re-run after any interruption and
@@ -86,9 +86,9 @@ Pythia-160M (4.26 GiB measured) and Gemma-2-2B (~25 GiB estimated). **Always sta
 `-P 1`**, confirm one cell completes, then scale — and filter by model:
 
 ```bash
-./05_run_queue.sh stageB 1                    # prove one cell works
-./05_run_queue.sh stageB 12 pythia160m        # then pack the small model densely
-./05_run_queue.sh stageB 4  gemma2_2b         # and the large model sparsely
+bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 1                    # prove one cell works
+bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 12 pythia160m        # then pack the small model densely
+bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 4  gemma2_2b         # and the large model sparsely
 ```
 
 Watch it: `nvidia-smi --query-gpu=memory.used --format=csv -l 5`. Use `tmux` so a dropped SSH

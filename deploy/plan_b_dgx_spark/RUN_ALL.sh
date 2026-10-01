@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # [AI-GEN] agent=Claude date=2026-09-21 task=Plan B one-command orchestrator (stops only where a human must decide)
 #
-#   ./deploy/plan_b_dgx_spark/RUN_ALL.sh [parallelism] [model-filter]
+#   bash deploy/plan_b_dgx_spark/RUN_ALL.sh [parallelism] [model-filter]
 #
 # Example:
-#   ./RUN_ALL.sh 1                 # careful first pass, one cell at a time
-#   ./RUN_ALL.sh 12 pythia160m     # then pack the small model densely
-#   ./RUN_ALL.sh 4  gemma2_2b      # and the large model sparsely
+#   bash deploy/plan_b_dgx_spark/RUN_ALL.sh 1                 # careful first pass, one cell at a time
+#   bash deploy/plan_b_dgx_spark/RUN_ALL.sh 12 pythia160m     # then pack the small model densely
+#   bash deploy/plan_b_dgx_spark/RUN_ALL.sh 4  gemma2_2b      # and the large model sparsely
 #
 # Runs every step in order and is RESUMABLE - re-run after any interruption and finished
 # cells are skipped. It pauses at exactly ONE place, the freeze, because that is the
