@@ -91,7 +91,7 @@ bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 12 pythia160m        # then 
 bash deploy/plan_b_dgx_spark/05_run_queue.sh stageB 4  gemma2_2b         # and the large model sparsely
 ```
 
-Watch it: `nvidia-smi --query-gpu=memory.used --format=csv -l 5`. Use `tmux` so a dropped SSH
+Watch it: `watch -n 10 free -g` (the GB10's memory is unified, so `nvidia-smi` reports memory as `N/A`). Use `tmux` so a dropped SSH
 session does not kill a two-day run.
 
 **4. Grouped-query attention.** Gemma-2 and Llama-3.2 are expected to use GQA, which the

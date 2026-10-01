@@ -394,7 +394,7 @@ cat cells.txt | xargs -P 4 -I {} sh -c \
 `-P 4` is the concurrency. Rules:
 
 - **Start with `-P 1`** and confirm one cell completes correctly before scaling up.
-- **Watch memory** with `nvidia-smi --query-gpu=memory.used --format=csv -l 5` during the first
+- **Watch memory** with `watch -n 10 free -g` (unified memory: `nvidia-smi` shows `N/A`) during the first
   parallel batch.
 - **Never run Stage B and Stage C for the same cell concurrently.** Stage C reads the frozen
   null that Stage B produces.

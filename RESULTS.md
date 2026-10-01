@@ -14,9 +14,12 @@ Every result the project produces, dated, from 2026-09-30 onward. Rules:
   (`experiments/time_attribution.py`) and the behaviour check
   (`deploy/shared/check_task_behaviour.py`) append their own rows too. Record anything else
   by hand in the table below, or with `python deploy/shared/record_result.py --run-dir runs/<run_name>`.
-- **Either machine may append.** Run `git pull` before, then commit and push this file
-  straight after. `.gitattributes` gives it the `union` merge driver, so rows appended on
-  both machines merge without a conflict.
+- **The Spark cannot push; Windows is the only machine that commits this file.** The Spark's
+  run log fills locally. After each batch, `git diff RESULTS.md | grep '^+|'` on the Spark
+  prints just the new rows. They are pasted on Windows, appended unchanged (minus the `+`) and
+  committed there. Then, on the Spark, `cp RESULTS.md ~/results_backups/RESULTS_$(date +%F_%H%M).md
+  && git checkout -- RESULTS.md && git pull` brings the committed copy back. Rows are never
+  retyped.
 - This is a **project-wide rule** (CLAUDE.md §8): every result, evidence or not, gets a
   dated row here in the same session it is produced.
 

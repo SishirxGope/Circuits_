@@ -57,7 +57,7 @@ echo "Logs: $LOG"
 if [ "$PAR" -gt 1 ]; then
   echo ""
   echo "Watch memory in another terminal:"
-  echo "  nvidia-smi --query-gpu=memory.used --format=csv -l 5"
+  echo "  watch -n 10 free -g      (GB10 memory is unified: nvidia-smi reports it as N/A)"
 fi
 echo ""
 

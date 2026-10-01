@@ -162,7 +162,7 @@ Rules:
 - **Scripts log themselves.** `_run_one.sh` appends a row for every Stage A/B/C cell, success or failure (`deploy/shared/record_result.py`). `experiments/time_attribution.py` and `deploy/shared/check_task_behaviour.py` call `record_result.append_row()`. **Any new script that produces a result must do the same** (wrapped so that a logging failure never fails the run). Anything without a script gets a hand row in the "Recorded results" table.
 - **Append-only.** Never edit or delete a row. A wrong row gets a new, correcting row that points back to it.
 - **Numbers are copied from the output file** (JSON, parquet, CSV, log), never retyped from a chat or from memory (AI_RULES.md 2.2). The row names the file it came from.
-- **Both machines may append.** Run `git pull` before writing, then commit and push `RESULTS.md` right after. `.gitattributes` gives `RESULTS.md` the `union` merge driver so two machines' appended rows merge without a conflict. The PI commits and pushes; agents never do.
+- **The Spark cannot push; Windows is the only committer.** Spark rows are appended locally by the scripts, carried to Windows by pasting the output of `git diff RESULTS.md | grep '^+|'`, appended there verbatim and committed. The Spark then backs up its copy and runs `git checkout -- RESULTS.md && git pull` (see the RESULTS.md header). The PI commits and pushes; agents never do.
 
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
