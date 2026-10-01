@@ -1,4 +1,5 @@
 # [AI-GEN] agent=Claude date=2026-10-01 task=Does each model DO each task on the pre-registered prompts? Forward pass only, with and without BOS
+# modified: [AI-GEN] agent=Claude date=2026-10-01 task=append its verdicts to RESULTS.md (project rule, CLAUDE.md §8)
 # reviewed-by: PENDING
 #
 # WHY THIS EXISTS
@@ -123,7 +124,33 @@ def main(argv: list[str] | None = None) -> int:
     path = out_dir / f"{stamp}_behaviour.json"
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nNON-EVIDENCE report -> {path}")
+    _record_in_results(report, path)
     return 0
+
+
+def _record_in_results(report: dict[str, Any], path: Path) -> None:
+    """Project rule (CLAUDE.md §8): one timestamped RESULTS.md row per (model, task)."""
+    try:
+        from record_result import append_row
+
+        try:
+            where = f"`{path.resolve().relative_to(REPO).as_posix()}`"
+        except ValueError:
+            where = f"`{path}`"
+        by_pair: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for r in report["results"]:
+            by_pair.setdefault((r["model"], r["task"]), []).append(r)
+        for (model_key, task_name), rs in by_pair.items():
+            text = "; ".join(
+                f"BOS {r['prepend_bos']} ({'pre-registered' if r['pre_registered'] else 'flipped'}): "
+                f"clean {r['clean_mean']:.3f}, corrupt {r['corrupt_mean']:.3f} -> {r['verdict']}"
+                for r in rs
+            )
+            append_row("pilot-behaviour", model_key, task_name, "dense",
+                       f"NON-EVIDENCE, seed {report['seed']}, n={rs[0]['n_prompts']}: {text}", where)
+        print("rows added to RESULTS.md")
+    except Exception as exc:  # noqa: BLE001 - logging must never fail the check
+        print(f"(could not add RESULTS.md rows: {type(exc).__name__}: {exc})")
 
 
 if __name__ == "__main__":

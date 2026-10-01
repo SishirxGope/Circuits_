@@ -510,6 +510,43 @@ pilot is **proposed, not approved**. Status: **PROVISIONAL**.
 > prompts it prefers the wrong name. The BOS question is decided separately, after
 > `deploy/shared/check_task_behaviour.py`, and before any Gemma run.
 
+> **GEMMA-2-2B BOS AMENDMENT, 2026-10-01 — PROPOSED; binding when the PI commits it.**
+> A model-specific amendment to Q6's `prepend_bos: false`, fixed **before any Gemma-2-2B stage
+> run exists**. The behaviour check (`deploy/shared/check_task_behaviour.py`, forward pass only,
+> seed 0, n = 300, `runs/pilot_behaviour/20261001-014312_behaviour.json`, commit `cfe622a`;
+> non-evidence) gave clean / corrupt IOI metric:
+>
+> | Model | no BOS (pre-registered) | BOS |
+> |---|---|---|
+> | Pythia-160M IOI | 4.560 / −0.273 | 5.418 / −0.250 |
+> | Pythia-410M IOI | 3.769 / −0.109 | 4.231 / −0.157 |
+> | Llama-3.2-1B IOI | 4.972 / −0.010 | 5.499 / −0.009 |
+> | **Gemma-2-2B IOI** | **−4.326 / −0.164 — does not do the task** | **5.311 / −0.170** |
+>
+> (greater-than, Pythia only: 160M 0.763 / −0.640 vs 0.630 / −0.670; 410M 0.910 / −0.707 vs
+> 0.934 / −0.673.)
+>
+> **Proposal:** Gemma-2-2B runs every stage with `task.prepend_bos=true`. Every other model keeps
+> the pre-registered no-BOS prompts. Reasons:
+> 1. A circuit extracted from a model that does not perform the task is not the task's circuit.
+>    Without BOS, Gemma's contribution to the grid would be uninterpretable.
+> 2. BOS is part of Gemma-2's input format. Q7's perplexity protocol already prepends `<bos>` to
+>    every window for exactly this reason: per-window `<bos>` alone moves Gemma-2 perplexity from
+>    192 to 12.
+> 3. The rule is the same one Q6 used ("the prompts must elicit the task"), applied per model. It
+>    was decided on a forward-pass check, not on any circuit, CSI or null.
+>
+> **Cost, stated for the paper:** Gemma's prompts differ from the other models' by one leading
+> token. Cross-model comparisons involving Gemma must say so. The alternative is to keep no-BOS
+> and report Gemma as "does not perform IOI under the shared protocol". That is also defensible,
+> but it drops the model the C5 cross-audit depends on.
+>
+> **Implemented as:** `deploy/shared/gen_cells.py::MODEL_TASK_OVERRIDES` adds
+> `task.prepend_bos=true` to Gemma's Stage A, B and C queue lines. The task YAMLs are unchanged
+> (AI_RULES.md 1.2). `tests/test_freeze_discovery.py::test_only_gemma_gets_bos_and_on_every_stage`
+> pins it. **To reject it:** empty that dict and re-run `python deploy/shared/gen_cells.py queues`,
+> before any Gemma run.
+
 ---
 
 ### Q5 — HuggingFace revision pins  **RESOLVED 2026-09-12** (one PI action left)

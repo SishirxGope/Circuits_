@@ -56,6 +56,15 @@ PLAN_B_MODELS = ["pythia160m", "pythia410m", "gemma2_2b", "llama32_1b"]
 # Stage C lines, so the run name (B16xS5xR10) and the Stage C tags carry the R of the frozen
 # null. Changing this after a model's freeze means re-running its Stage B (AI_RULES.md 1.3).
 MODEL_NULL_R: dict[str, int] = {"gemma2_2b": 10}
+
+# Per-model task overrides: a model-specific amendment to the pre-registered prompts.
+# docs/HUMAN_DECISIONS.md "Gemma-2-2B BOS amendment", 2026-10-01 (PROPOSED; binding when the PI
+# commits it). The task configs pre-register prepend_bos: false, decided on Pythia. On those
+# prompts Gemma-2-2B does not do IOI (clean metric -4.326, seed 0, n=300); with BOS it does
+# (+5.311): deploy/shared/check_task_behaviour.py, runs/pilot_behaviour/20261001-014312_behaviour.json.
+# Emitted on that model's Stage A, B and C lines, so all three stages see the same prompts.
+# The amendment was fixed before any Gemma stage run existed.
+MODEL_TASK_OVERRIDES: dict[str, dict[str, str]] = {"gemma2_2b": {"task.prepend_bos": "true"}}
 TASKS = ["ioi", "greater_than"]
 
 # (model, task) pairs that CANNOT run, with the reason. These are properties of the
@@ -153,7 +162,12 @@ def _overrides(model: str, task: str, c: dict, stage: str) -> str:
     )
     if model in MODEL_NULL_R:
         common += f" nulls.R={MODEL_NULL_R[model]}"
+    common += _task_overrides(model)
     return f"stage={stage} {common}"
+
+
+def _task_overrides(model: str) -> str:
+    return "".join(f" {k}={v}" for k, v in MODEL_TASK_OVERRIDES.get(model, {}).items())
 
 
 def write_stage_a_queues() -> None:
@@ -170,7 +184,8 @@ def write_stage_a_queues() -> None:
             "# One Stage A dense reference per viable (model, task) pair.",
             f"# {len(pairs)} viable (model, task) pairs = {len(pairs)} cells",
             "",
-            *(f"stage=stageA model={model} task={task} setting=dense" for model, task in pairs),
+            *(f"stage=stageA model={model} task={task} setting=dense{_task_overrides(model)}"
+              for model, task in pairs),
         ]
         path = plan_dir / "cells_stagea.txt"
         path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")

@@ -114,6 +114,62 @@ class TestRows:
         assert not results.exists()
 
 
+class TestScriptsLogThemselves:
+    """CLAUDE.md §8: a result without a stage run directory still gets its row."""
+
+    @pytest.fixture
+    def results(self, tmp_path, monkeypatch):
+        import functools
+        import sys
+        import types
+
+        results = tmp_path / "RESULTS.md"
+        fake = types.SimpleNamespace(append_row=functools.partial(record_result.append_row, results=results))
+        monkeypatch.setitem(sys.modules, "record_result", fake)
+        return results
+
+    def _load(self, path: Path, name: str):
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_behaviour_check_writes_one_row_per_model_and_task(self, results, tmp_path):
+        check = self._load(REPO / "deploy" / "shared" / "check_task_behaviour.py", "_check_under_test")
+        report = {"seed": 0, "results": [
+            {"model": "gemma2_2b", "task": "ioi", "prepend_bos": False, "pre_registered": True,
+             "clean_mean": -4.326, "corrupt_mean": -0.164, "n_prompts": 300, "verdict": "DOES NOT do the task"},
+            {"model": "gemma2_2b", "task": "ioi", "prepend_bos": True, "pre_registered": False,
+             "clean_mean": 5.311, "corrupt_mean": -0.170, "n_prompts": 300, "verdict": "does the task"},
+        ]}
+        check._record_in_results(report, tmp_path / "x_behaviour.json")
+        (row,) = _rows(results)
+        assert WHEN.match(row)
+        assert "| pilot-behaviour | gemma2_2b | ioi | dense |" in row
+        assert "BOS False (pre-registered): clean -4.326, corrupt -0.164 -> DOES NOT do the task" in row
+        assert "BOS True (flipped): clean 5.311" in row
+
+    def test_the_timing_pilot_writes_one_row_per_task(self, results, tmp_path):
+        timing = self._load(REPO / "experiments" / "time_attribution.py", "_timing_under_test")
+        run = {"peak_vram_gib": 37.5, "clean_metric_mean": -4.33}
+        report = {"model": {"name": "gemma-2-2b", "dtype": "float32"}, "tasks": {"ioi": {
+            "runs": [run, {**run, "clean_metric_mean": -4.69}], "t_attribution_s_mean": 290.3,
+            "run_plan_rule_applied_to_t_attribution": "S=5, R=10"}}}
+        timing._record_in_results(report, tmp_path / "x_timing.json")
+        (row,) = _rows(results)
+        assert "| pilot-timing | gemma-2-2b | ioi | float32 |" in row
+        assert "290.3 s per attribution pass (2 seeds), peak 37.5 GiB; rule -> S=5, R=10" in row
+        assert "clean metric per seed -4.33 / -4.69" in row
+
+    def test_a_logging_failure_never_fails_the_script(self, tmp_path, monkeypatch, capsys):
+        import sys
+
+        monkeypatch.setitem(sys.modules, "record_result", None)  # import raises
+        check = self._load(REPO / "deploy" / "shared" / "check_task_behaviour.py", "_check_under_test2")
+        check._record_in_results({"seed": 0, "results": []}, tmp_path / "x.json")
+        assert "could not add RESULTS.md rows" in capsys.readouterr().out
+
+
 class TestTheCellRunner:
     def test_done_means_the_marker_not_a_traceback(self):
         script = (REPO / "deploy" / "plan_b_dgx_spark" / "_run_one.sh").read_text(encoding="utf-8")

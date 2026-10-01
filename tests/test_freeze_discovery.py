@@ -114,6 +114,19 @@ class TestTheStageBQueue:
             assert resolved["nulls"]["R"] == expected, line
             assert f"xR{expected}_" in _stage_b_run_name(resolved)
 
+    def test_only_gemma_gets_bos_and_on_every_stage(self):
+        """HUMAN_DECISIONS.md Gemma-2-2B BOS amendment, 2026-10-01: Gemma's Stage A, B and C
+        prompts carry BOS; every other model keeps the pre-registered prepend_bos: false."""
+        pytest.importorskip("hydra")
+        queues = [QUEUE_A, QUEUE_B, QUEUE_B.with_name("cells_stagec.txt")]
+        seen = 0
+        for queue in queues:
+            for line in _rows(queue):
+                resolved = _compose(line)
+                assert resolved["task"]["prepend_bos"] is ("model=gemma2_2b " in line), line
+                seen += 1
+        assert seen == 6 + 66 + 66
+
     def test_the_stage_a_queue_is_one_dense_reference_per_viable_pair(self):
         pytest.importorskip("hydra")
         rows = _rows(QUEUE_A)

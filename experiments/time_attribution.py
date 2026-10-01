@@ -1,4 +1,5 @@
 # [AI-GEN] agent=Claude date=2026-09-14 task=Q3 timing pilot for the dense-node pipeline (NON-EVIDENCE)
+# modified: [AI-GEN] agent=Claude date=2026-10-01 task=append a timestamped RESULTS.md row per timed task (project rule, CLAUDE.md §8)
 # reviewed-by: PENDING
 
 """Q3 timing pilot: how long one attribution pass takes, so B/S/R can be fixed from a number.
@@ -176,6 +177,31 @@ def run(model_name: str, tasks: list[str], n_seeds: int, max_batch_size: int, ou
     return out_path
 
 
+def _record_in_results(report: dict[str, Any], path: Path) -> None:
+    """Project rule (CLAUDE.md §8): one timestamped RESULTS.md row per timed task."""
+    try:
+        sys.path.insert(0, str(ROOT / "deploy" / "shared"))
+        from record_result import append_row
+
+        try:
+            where = f"`{path.resolve().relative_to(ROOT).as_posix()}`"
+        except ValueError:
+            where = f"`{path}`"
+        model = report["model"]
+        for task, r in report["tasks"].items():
+            peak = max((x["peak_vram_gib"] or 0.0) for x in r["runs"])
+            metric = " / ".join(f"{x['clean_metric_mean']:+.2f}" for x in r["runs"])
+            append_row(
+                "pilot-timing", str(model["name"]), task, str(model["dtype"]),
+                f"NON-EVIDENCE: {r['t_attribution_s_mean']:.1f} s per attribution pass "
+                f"({len(r['runs'])} seeds), peak {peak:.1f} GiB; rule -> "
+                f"{r['run_plan_rule_applied_to_t_attribution']}; clean metric per seed {metric}",
+                where,
+            )
+    except Exception as exc:  # noqa: BLE001 - logging must never fail the pilot
+        print(f"(could not add the RESULTS.md row: {type(exc).__name__}: {exc})")
+
+
 def main(argv: list[str] | None = None) -> None:
     # allow_abbrev=False: argparse's prefix matching otherwise accepts `--seed 0` as
     # `--seeds=0`, which silently timed zero seeds. Every deploy script and doc carried
@@ -194,6 +220,7 @@ def main(argv: list[str] | None = None) -> None:
     path = run(args.model, args.tasks, args.seeds, args.max_batch_size, Path(args.out))
     report = json.loads(path.read_text(encoding="utf-8"))
     print(f"NON-EVIDENCE timing report -> {path}")
+    _record_in_results(report, path)
     for task, r in report["tasks"].items():
         cells = ", ".join(f"{k} {v/60:.1f} min" for k, v in r["per_cell_seconds"].items())
         print(f"  {task}: t_attribution {r['t_attribution_s_mean']:.2f}s | per cell: {cells} | Run_Plan rule -> {r['run_plan_rule_applied_to_t_attribution']}")

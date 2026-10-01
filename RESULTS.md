@@ -10,10 +10,15 @@ Every result the project produces, dated, from 2026-09-30 onward. Rules:
   not scientific results. They are recorded because the plan depends on them.
 - **The run log at the bottom fills itself.** `deploy/plan_b_dgx_spark/_run_one.sh` calls
   `deploy/shared/record_result.py` after every Stage A/B/C cell, success or failure, and
-  appends one row with the local date and time. Record anything else by hand in the table
-  below, or with `python deploy/shared/record_result.py --run-dir runs/<run_name>`.
-- **Edit this file on the Spark only** from now on (that is where the rows are appended), and
-  commit it from there, so the two machines never both change it.
+  appends one row with the local date and time. The timing pilot
+  (`experiments/time_attribution.py`) and the behaviour check
+  (`deploy/shared/check_task_behaviour.py`) append their own rows too. Record anything else
+  by hand in the table below, or with `python deploy/shared/record_result.py --run-dir runs/<run_name>`.
+- **Either machine may append.** Run `git pull` before, then commit and push this file
+  straight after. `.gitattributes` gives it the `union` merge driver, so rows appended on
+  both machines merge without a conflict.
+- This is a **project-wide rule** (CLAUDE.md §8): every result, evidence or not, gets a
+  dated row here in the same session it is produced.
 
 Decisions behind these results live in `docs/HUMAN_DECISIONS.md`; what is still to be run
 lives in `docs/RUNPLAN.md`.
@@ -33,6 +38,14 @@ Times were not recorded for the entries before this file existed; they carry the
 | 2026-09-30 | **B6 exit gate, first criterion (Jaccard ≥ 0.2), seeds 0–4** | **FAILED**: Jaccard 0.028. Core band 37 edges, 27 in the 963-edge ACDC/Wang et al. reference (precision 0.73, recall 0.028) | Spark `runs/20260930_stageA_gpt2-small_ioi_dense_B16xS5_seed0` | gate result (reported in the paper) |
 | 2026-09-30 | **B6 exit gate, replacement criterion (precision ≥ 0.3 and hypergeometric p ≤ 0.001), fresh seeds 5–9** — criterion changed after seeing the failure; disclosed | **PASSED**: precision 0.725, p = 1.27e-45; core band 51 edges, 37 shared, reference 963, universe 32,491; Jaccard 0.038 (reported only). config_hash `a324db7b…` | Spark `runs/20260930_stageA_gpt2-small_ioi_dense_B16xS5_seed5`; `data/reference/ioi_gpt2_small_gate_pass.json` | gate result (reported in the paper) |
 | 2026-09-30 | Preflight on the Spark | **10 of 10 OK**; "All 10 blockers implemented. Clear to run science." | `deploy/shared/preflight_blockers.py` | engineering gate |
+| 2026-10-01 (time not recorded) | Attribution-pass timing, Pythia-160M, DGX Spark, 2 seeds | IOI 19.97 s/pass, 35.1 min per cell at S5×R20; greater-than 10.20 s/pass, 18.0 min per cell. Q3 rule → S=5, R=20 | Spark `runs/pilot_timing/*_timing_pythia160m.json` | non-evidence (planning) |
+| 2026-10-01 (time not recorded) | Attribution-pass timing, Pythia-410M, DGX Spark, 2 seeds | IOI 101.40 s/pass, 178.5 min per cell at S5×R20; greater-than 61.50 s/pass, 108.6 min per cell. Q3 rule → S=5, R=20 | Spark `runs/pilot_timing/*_timing_pythia410m.json` | non-evidence (planning) |
+| 2026-10-01T01:19:20+05:30 | Attribution-pass timing, Gemma-2-2B (float32), IOI, DGX Spark, 2 seeds | 290.3 s/pass, peak 37.5 GiB. Q3 rule → **S=5, R=10**. Clean IOI metric −4.33 / −4.69 (negative: prefers the wrong name, see the behaviour check below) | Spark `runs/pilot_timing/20261001-011920_timing_gemma2_2b.json` | non-evidence (planning) |
+| 2026-10-01T01:29:17+05:30 | Attribution-pass timing, Llama-3.2-1B (bf16), IOI, DGX Spark, 2 seeds | 52.2 s/pass, peak 22.5 GiB. Q3 rule → S=5, R=20. Clean IOI metric +4.97 / +5.04 | Spark `runs/pilot_timing/20261001-012917_timing_llama32_1b.json` | non-evidence (planning) |
+| 2026-10-01T01:38:52+05:30 | Behaviour check, Pythia-160M, seed 0, n=300 (clean / corrupt metric) | IOI: no BOS (pre-registered) 4.560 / −0.273; BOS 5.418 / −0.250. greater-than: no BOS (pre-registered) 0.763 / −0.640; BOS 0.630 / −0.670. Does both tasks either way | Spark `runs/pilot_behaviour/20261001-014312_behaviour.json` (commit cfe622a) | non-evidence (check) |
+| 2026-10-01T01:38:52+05:30 | Behaviour check, Pythia-410M, seed 0, n=300 | IOI: no BOS (pre-registered) 3.769 / −0.109; BOS 4.231 / −0.157. greater-than: no BOS (pre-registered) 0.910 / −0.707; BOS 0.934 / −0.673. Does both tasks either way | same file | non-evidence (check) |
+| 2026-10-01T01:38:52+05:30 | Behaviour check, Gemma-2-2B, IOI, seed 0, n=300 | **no BOS (pre-registered): −4.326 / −0.164, DOES NOT do the task**; BOS: 5.311 / −0.170, does the task | same file | non-evidence (check); blocks Gemma until the PI decides BOS |
+| 2026-10-01T01:38:52+05:30 | Behaviour check, Llama-3.2-1B, IOI, seed 0, n=300 | no BOS (pre-registered) 4.972 / −0.010; BOS 5.499 / −0.009. Does the task either way | same file | non-evidence (check) |
 
 ---
 

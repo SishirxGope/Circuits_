@@ -19,6 +19,10 @@
 #
 # Appends are one os.write on an O_APPEND descriptor, so cells finishing at the same time
 # under `xargs -P` do not interleave their rows.
+#
+# PROJECT RULE (CLAUDE.md §8, 2026-10-01): every result - stage runs, pilots, checks,
+# gates - gets a timestamped row in RESULTS.md. Scripts that produce a result without a
+# stage run directory call append_row() themselves (time_attribution, check_task_behaviour).
 
 from __future__ import annotations
 
@@ -122,6 +126,14 @@ def append(line: str, results: Path = RESULTS) -> None:
         os.write(fd, line.encode("utf-8"))
     finally:
         os.close(fd)
+
+
+def append_row(stage: str, model: str, task: str, cell: str, result: str, where: str,
+               results: Path = RESULTS) -> None:
+    """One run-log row for a result that is not a stage run directory (a timing pilot, a
+    behaviour check, a gate). Timestamped now, in local time; the commit is HEAD."""
+    row = {"stage": stage, "model": model, "task": task, "cell": cell, "result": result}
+    append(table_row(row, where, git_commit(), now_local()), results)
 
 
 def _cell_field(cell: str, key: str) -> str:

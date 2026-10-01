@@ -6,5 +6,5 @@ stage=stageA model=pythia160m task=ioi setting=dense
 stage=stageA model=pythia160m task=greater_than setting=dense
 stage=stageA model=pythia410m task=ioi setting=dense
 stage=stageA model=pythia410m task=greater_than setting=dense
-stage=stageA model=gemma2_2b task=ioi setting=dense
+stage=stageA model=gemma2_2b task=ioi setting=dense task.prepend_bos=true
 stage=stageA model=llama32_1b task=ioi setting=dense

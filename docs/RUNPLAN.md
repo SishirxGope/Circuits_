@@ -119,8 +119,12 @@ python deploy/shared/preflight_blockers.py               # expect 10 of 10 OK
 bash deploy/plan_b_dgx_spark/04_timing.sh 2>&1 | tee logs/timing_all.txt
 ```
 
-Non-evidence. Every compute figure so far was measured on the RTX 4060. Add one hand row per
-model to RESULTS.md (s/pass, peak memory).
+Non-evidence. Every compute figure so far was measured on the RTX 4060. The timer now appends its
+own RESULTS.md row per task (CLAUDE.md §8).
+
+**DONE 2026-10-01**, with the behaviour check that followed
+(`python deploy/shared/check_task_behaviour.py`). Rows are in RESULTS.md, and D1 and D7 below
+come from them.
 
 ### R2 — Decisions that must be written down BEFORE the first freeze (PI-owned)
 
@@ -135,6 +139,7 @@ frozen cell means re-running from Stage B and disclosing it.
 | D4 | **Behavioural floor**: a cell whose compressed model no longer does the task has no circuit to measure | e.g. "cells whose task metric falls to or below the corrupted-prompt baseline are reported as behaviourally dead and excluded from CSI claims". Needs a small engineering addition (task metric per Stage C cell). Decide before Stage C. |
 | D5 | **Two directional predictions** (Run_Plan §0.5 and Part 4): exact-edge CSI near/above the floor with coarse-level CSI below it; RTN and matched-PPL pruning damaging the same edges | Write them into the freeze commit message. A correct pre-registered prediction is worth far more than the same number found afterwards. |
 | D6 | **Pythia-160M AWQ outlier**: one tensor at ‖ΔW‖/‖W‖ = 0.60 against ~0.10 elsewhere | Identify it before freezing the `awq_int4` cells. The null is matched to these magnitudes, so a bug here would be frozen into the denominator. |
+| D7 | **Gemma-2-2B BOS.** On the pre-registered no-BOS prompts Gemma does not do IOI (clean −4.326); with BOS it does (+5.311) | Adopt BOS for Gemma only. PROPOSED in HUMAN_DECISIONS ("Gemma-2-2B BOS amendment") and already wired into Gemma's queue lines (`gen_cells.MODEL_TASK_OVERRIDES`). **Must be settled before any Gemma stage run**, including Stage A. |
 
 ### R3 — Stage A dense references (6 runs)
 
@@ -161,9 +166,9 @@ grep -l CELL_COMPLETE logs/stageB/*pythia160m* | wc -l      # progress: done cel
 Every Stage B row says **NOT frozen**: it is a draft until R6.
 
 Cost per cell = S × (R + 1) attribution passes (the dense ensemble plus R perturbed ensembles),
-i.e. **105 passes at S = 5, R = 20**. At the 4060's Pythia-160M speed that is ~75–85 min per IOI
-cell and ~13–14 min per greater-than cell, **~16–18 h for all 22** run one at a time. Replace
-these with the R1 numbers; parallelism on one GPU gives less than a linear speed-up.
+i.e. **105 passes at S = 5, R = 20**. Measured on the Spark (R1): **35.1 min per IOI cell and
+18.0 min per greater-than cell, 9.7 h for all 22** run one at a time. Parallelism on one GPU
+gives less than a linear speed-up.
 
 ### R5 — Stage B on the primaries, then Pythia-410M
 
