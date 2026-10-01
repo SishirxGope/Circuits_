@@ -59,3 +59,10 @@ Appended automatically, one row per finished or failed cell. Local time with UTC
 
 | When (local) | Stage | Model | Task | Cell | Result | Run dir | Commit |
 |---|---|---|---|---|---|---|---|
+| 2026-10-01T11:03:32+05:30 | stageA | pythia-160m | greater_than | dense | B=16 S=5; edges with s>0: 256; core 15, contingent 18, noise 223 | `runs/20261001_stageA_pythia-160m_greater-than_dense_B16xS5_seed0` | 699abdb |
+| 2026-10-01T11:05:53+05:30 | stageA | pythia-160m | ioi | dense | B=16 S=5; edges with s>0: 1317; core 41, contingent 159, noise 1117 | `runs/20261001_stageA_pythia-160m_ioi_dense_B16xS5_seed0` | 699abdb |
+| 2026-10-01T11:14:39+05:30 | stageA | pythia-410m | ioi | dense | B=16 S=5; edges with s>0: 4647; core 96, contingent 426, noise 4125 | `runs/20261001_stageA_pythia-410m_ioi_dense_B16xS5_seed0` | 699abdb |
+| 2026-10-01T11:19:54+05:30 | stageA | pythia-410m | greater_than | dense | B=16 S=5; edges with s>0: 1792; core 37, contingent 92, noise 1663 | `runs/20261001_stageA_pythia-410m_greater-than_dense_B16xS5_seed0` | 699abdb |
+| 2026-10-01T11:25:40+05:30 | stageA | llama-3.2-1b | ioi | dense | B=16 S=5; edges with s>0: 12461; core 742, contingent 1801, noise 9918 | `runs/20261001_stageA_llama-3-2-1b_ioi_dense_B16xS5_seed0` | 699abdb |
+| 2026-10-01T11:52:20+05:30 | stageA | gemma-2-2b | ioi | dense | B=16 S=5; edges with s>0: 4082; core 316, contingent 673, noise 3093 | `runs/20261001_stageA_gemma-2-2b_ioi_dense_B16xS5_seed0` | 699abdb |
+| 2026-10-01T12:09:28+05:30 | stageB | pythia-160m | greater_than | rtn-8 | R=20; D_null L1 median 5.475 [min 3.35, max 11.17]; JS median 0.09171; dnull sha c02bfa1852d6 (NOT frozen) | `runs/20261001_stageB_pythia-160m_greater-than_null-matchedmag-rtn-int8_B16xS5xR20_seed0` | 699abdb |
